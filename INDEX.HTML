@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Workout Tracker</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+    
+    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    const WEEKLY_SCHEDULES = {
+      1: {
+        Monday: ['Walk 1 mile', 'Incline Dumbbell Bench Press', 'Flat Dumbbell Bench Press', 'Cable Fly', 'EZ-Bar Skull Crushers', 'Hanging Leg Raise'],
+        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Glute Bridge / Hip Thrust', 'Seated Hamstring Curl', 'Standing Calf Raises', 'Pallof Press', 'Terminal Knee Extension'],
+        Wednesday: ['Walk 1 mile', 'Lat Pulldown', 'Chest-Supported Row', 'Face Pulls', 'EZ Bar Curl', 'Incline Dumbbell Curl'],
+        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Woodchoppers', 'Bird Dogs', 'Side Plank Raises', 'Stability Ball Rollout', 'Tricep Pushdowns'],
+        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Seated Shoulder Press', 'Low Row', 'Overhead Tricep Extension', 'Cable Crunch'],
+        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Flexor Stretch', 'Hamstring Stretch'],
+        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
+      },
+      2: {
+        Monday: ['Walk 1 mile', 'Incline Barbell Bench Press', 'Flat Dumbbell Bench Press', 'Cable Fly (low-to-high)', 'Skull Crushers', 'Hanging Knee Raise'],
+        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Split Squat', 'Seated Hamstring Curl', 'Standing Calf Raise', 'Pallof Press Iso Hold'],
+        Wednesday: ['Walk 1 mile', 'Pull-Ups or Assisted Pull-Ups', 'Chest-Supported Row', 'Rear Delt Fly', 'Hammer Curl', 'Preacher Curl'],
+        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Lift (low-to-high)', 'Bird Dogs', 'Side Plank', 'Stability Ball Rollout', 'Tricep Pushdowns'],
+        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Machine Shoulder Press', 'Low Row', 'Rope Pressdown', 'Weighted Cable Crunch'],
+        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Mobility', 'Hamstring Stretch'],
+        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
+      },
+      3: {
+        Monday: ['Walk 1 mile', 'Reverse-Grip Bench Press', 'Seated Dumbbell Arnold Press', 'Cable Fly', 'EZ-Bar Skull Crushers', 'Hanging Leg Raise'],
+        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Glute Bridge Hold', 'Seated Hamstring Curl', 'Seated Calf Raise', 'Pallof Press'],
+        Wednesday: ['Walk 1 mile', 'Wide-Grip Seated Row', 'Straight-Arm Pulldown', 'Rear Delt Fly', 'Spider Curl', 'Hammer Curl'],
+        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Woodchoppers', 'Bird Dogs', 'Side Plank Rotations', 'Stability Ball Rollout', 'Tricep Pushdowns'],
+        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Machine Shoulder Press', 'Cable Row', 'Overhead Tricep Extension', 'Cable Crunch'],
+        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Flexor Stretch', 'Hamstring Stretch'],
+        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
+      },
+      4: {
+        Monday: ['Walk 1 mile', 'Incline Bench Press', 'Seated Dumbbell Shoulder Press', 'Cable Fly', 'Cable Rope Pressdown', 'Hanging Knee Raise'],
+        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Split Squat (short stride)', 'Seated Hamstring Curl', 'Standing Calf Raises', 'Pallof Press'],
+        Wednesday: ['Walk 1 mile', 'Lat Pulldown', 'Single-Arm Dumbbell Row', 'Rear Delt Fly', 'Incline Dumbbell Curl', 'Reverse Curl'],
+        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Woodchoppers', 'Bird Dogs', 'Weighted Plank', 'Stability Ball Rollout', 'Tricep Pushdowns'],
+        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Machine Shoulder Press', 'Low Row', 'Overhead Tricep Extension', 'Weighted Cable Crunch'],
+        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Mobility', 'Hamstring Stretch'],
+        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
+      }
+    };
+
+    // Lucide React icons as SVG components
+    const Calendar = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    );
+
+    const TrendingUp = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+        <polyline points="17 6 23 6 23 12"></polyline>
+      </svg>
+    );
+
+    const Dumbbell = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="m6.5 6.5 11 11"></path>
+        <path d="m21 21-1-1"></path>
+        <path d="m3 3 1 1"></path>
+        <path d="m18 22 4-4"></path>
+        <path d="m2 6 4-4"></path>
+        <path d="m3 10 7-7"></path>
+        <path d="m14 21 7-7"></path>
+      </svg>
+    );
+
+    const Menu = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    );
+
+    const Download = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+    );
+
+    const Upload = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+    );
+
+    const ChevronDown = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    );
+
+    const ChevronUp = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    );
+
+    const ArrowUp = ({ size = 24, className = "" }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <line x1="12" y1="19" x2="12" y2="5"></line>
+        <polyline points="5 12 12 5 19 12"></polyline>
+      </svg>
+    );
+
+    function WorkoutTracker() {
+      const [tab, setTab] = useState('today');
+      const [currentWeek, setCurrentWeek] = useState(1);
+      const [workoutLogs, setWorkoutLogs] = useState([]);
+      const [bodyweightLogs, setBodyweightLogs] = useState([]);
+      const [todayWeight, setTodayWeight] = useState('');
+      const [todayInputs, setTodayInputs] = useState({});
+      const [expandedExercises, setExpandedExercises] = useState({});
+      const [showMenu, setShowMenu] = useState(false);
+      const fileInputRef = useRef(null);
+
+      useEffect(() => {
+        const saved = localStorage.getItem('workoutData');
+        if (saved) {
+          const data = JSON.parse(saved);
+          setCurrentWeek(data.currentWeek || 1);
+          setWorkoutLogs(data.workoutLogs || []);
+          setBodyweightLogs(data.bodyweightLogs || []);
+        }
+      }, []);
+
+      useEffect(() => {
+        localStorage.setItem('workoutData', JSON.stringify({
+          currentWeek,
+          workoutLogs,
+          bodyweightLogs
+        }));
+      }, [currentWeek, workoutLogs, bodyweightLogs]);
+
+      const exportData = () => {
+        const data = {
+          currentWeek,
+          workoutLogs,
+          bodyweightLogs,
+          exportDate: new Date().toISOString()
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `workout-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setShowMenu(false);
+        alert('Data exported successfully! 📁');
+      };
+
+      const importData = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            if (confirm('This will replace all current data. Continue?')) {
+              setCurrentWeek(data.currentWeek || 1);
+              setWorkoutLogs(data.workoutLogs || []);
+              setBodyweightLogs(data.bodyweightLogs || []);
+              setShowMenu(false);
+              alert('Data imported successfully! ✅');
+            }
+          } catch (error) {
+            alert('Error importing data. Please check the file format.');
+          }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+      };
+
+      const getCurrentSchedule = () => WEEKLY_SCHEDULES[currentWeek];
+
+      const logWorkout = () => {
+        const today = new Date().toISOString().split('T')[0];
+        const dayIndex = new Date().getDay();
+        const exercises = getCurrentSchedule()[DAYS[dayIndex]] || [];
+        
+        const logs = exercises.map(exName => ({
+          exerciseName: exName,
+          weight: parseFloat(todayInputs[exName]?.weight || 0),
+          reps: parseInt(todayInputs[exName]?.reps || 0),
+          date: today,
+          week: currentWeek
+        })).filter(log => log.weight > 0 && log.reps > 0);
+
+        if (logs.length > 0) {
+          setWorkoutLogs(prev => [...prev, ...logs]);
+          setTodayInputs({});
+          alert('Workout logged! 💪');
+        }
+      };
+
+      const logBodyweight = () => {
+        const today = new Date().toISOString().split('T')[0];
+        if (todayWeight && parseFloat(todayWeight) > 0) {
+          setBodyweightLogs(prev => [...prev, { weight: parseFloat(todayWeight), date: today }]);
+          setTodayWeight('');
+          alert('Bodyweight logged! ⚖️');
+        }
+      };
+
+      const getLastWorkout = (exerciseName) => {
+        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName);
+        return logs.length > 0 ? logs[logs.length - 1] : null;
+      };
+
+      const getFirstWorkout = (exerciseName) => {
+        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName);
+        return logs.length > 0 ? logs[0] : null;
+      };
+
+      const getAllWorkouts = (exerciseName) => {
+        return workoutLogs
+          .filter(log => log.exerciseName === exerciseName)
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+      };
+
+      const calculateGain = (exerciseName) => {
+        const first = getFirstWorkout(exerciseName);
+        const last = getLastWorkout(exerciseName);
+        if (!first || !last) return null;
+        
+        const firstVol = first.weight * first.reps;
+        const lastVol = last.weight * last.reps;
+        const gain = ((lastVol - firstVol) / firstVol * 100).toFixed(1);
+        return { first, last, gain: parseFloat(gain) };
+      };
+
+      const getExerciseEmoji = (name) => {
+        const lower = name.toLowerCase();
+        if (lower.includes('walk') || lower.includes('bike')) return '🚶';
+        if (lower.includes('bench') || lower.includes('press') && lower.includes('chest')) return '🏋️';
+        if (lower.includes('deadlift') || lower.includes('squat')) return '💪';
+        if (lower.includes('curl')) return '💪';
+        if (lower.includes('row') || lower.includes('pull')) return '🚣';
+        if (lower.includes('leg') || lower.includes('calf')) return '🦵';
+        if (lower.includes('shoulder') || lower.includes('delt')) return '💪';
+        if (lower.includes('tricep')) return '💪';
+        if (lower.includes('stretch') || lower.includes('mobility')) return '🧘';
+        if (lower.includes('foam') || lower.includes('roll')) return '🧘';
+        return '💪';
+      };
+
+      const toggleExpanded = (exerciseName) => {
+        setExpandedExercises(prev => ({
+          ...prev,
+          [exerciseName]: !prev[exerciseName]
+        }));
+      };
+
+      const renderToday = () => {
+        const dayIndex = new Date().getDay();
+        const dayName = DAYS[dayIndex];
+        const exercises = getCurrentSchedule()[dayName] || [];
+
+        return (
+          <div className="space-y-3">
+            <div className="bg-gray-800 p-3 rounded-lg">
+              <h3 className="text-sm text-gray-400 mb-2">Bodyweight Today</h3>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step="0.1"
+                  value={todayWeight}
+                  onChange={(e) => setTodayWeight(e.target.value)}
+                  placeholder="Enter weight (lbs)"
+                  className="flex-1 bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                />
+                <button onClick={logBodyweight} className="px-4 py-2 bg-green-600 rounded text-white text-sm">
+                  Log
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-bold text-white">{dayName} - Week {currentWeek}</h2>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map(week => (
+                  <button
+                    key={week}
+                    onClick={() => setCurrentWeek(week)}
+                    className={`px-2 py-1 rounded text-xs ${currentWeek === week ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+                  >
+                    W{week}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {exercises.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <p>No workout scheduled for {dayName}</p>
+              </div>
+            ) : (
+              <>
+                {exercises.map((exName, idx) => {
+                  const last = getLastWorkout(exName);
+                  
+                  return (
+                    <div key={idx} className="bg-gray-800 p-3 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">{getExerciseEmoji(exName)}</span>
+                        <div className="flex-1">
+                          <h3 className="text-white font-medium text-sm">{exName}</h3>
+                          {last && (
+                            <p className="text-xs text-gray-400">
+                              Last: {last.weight}lbs × {last.reps} reps
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          placeholder="Weight"
+                          value={todayInputs[exName]?.weight || ''}
+                          onChange={(e) => setTodayInputs(prev => ({
+                            ...prev,
+                            [exName]: { ...prev[exName], weight: e.target.value }
+                          }))}
+                          className="flex-1 bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Reps"
+                          value={todayInputs[exName]?.reps || ''}
+                          onChange={(e) => setTodayInputs(prev => ({
+                            ...prev,
+                            [exName]: { ...prev[exName], reps: e.target.value }
+                          }))}
+                          className="flex-1 bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                <button 
+                  onClick={logWorkout}
+                  className="w-full py-3 bg-green-600 rounded-lg text-white font-semibold"
+                >
+                  Complete Workout
+                </button>
+              </>
+            )}
+          </div>
+        );
+      };
+
+      const renderSchedule = () => {
+        const schedule = getCurrentSchedule();
+        
+        return (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-bold text-white">Week {currentWeek} Schedule</h2>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map(week => (
+                  <button
+                    key={week}
+                    onClick={() => setCurrentWeek(week)}
+                    className={`px-3 py-1 rounded text-sm ${currentWeek === week ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+                  >
+                    Week {week}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {DAYS.map(day => (
+              <div key={day} className="bg-gray-800 p-3 rounded-lg">
+                <h3 className="text-white font-semibold mb-2 text-sm">{day}</h3>
+                {(schedule[day] || []).length === 0 ? (
+                  <p className="text-gray-400 text-sm">Rest Day</p>
+                ) : (
+                  <div className="space-y-1">
+                    {(schedule[day] || []).map((exName, idx) => (
+                      <div key={idx} className="text-gray-300 text-xs">
+                        {getExerciseEmoji(exName)} {exName}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      };
+
+      const renderStrength = () => {
+        const allExercises = [...new Set(Object.values(WEEKLY_SCHEDULES).flatMap(week => 
+          Object.values(week).flat()
+        ))];
+        const exercisesWithData = allExercises.filter(ex => getFirstWorkout(ex));
+        
+        return (
+          <div className="space-y-3">
+            <h2 className="text-lg font-bold text-white">Strength Progress</h2>
+            {exercisesWithData.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No workout data yet. Start logging!</p>
+            ) : (
+              exercisesWithData.map((exName, idx) => {
+                const progress = calculateGain(exName);
+                const allLogs = getAllWorkouts(exName);
+                const isExpanded = expandedExercises[exName];
+                
+                if (!progress) return null;
+                
+                const { first, last, gain } = progress;
+                
+                return (
+                  <div key={idx} className="bg-gray-800 rounded-lg overflow-hidden">
+                    <div className="p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">{getExerciseEmoji(exName)}</span>
+                        <h3 className="text-white font-medium text-sm flex-1">{exName}</h3>
+                        <button
+                          onClick={() => toggleExpanded(exName)}
+                          className="text-gray-400"
+                        >
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <p className="text-gray-400 mb-1">Baseline</p>
+                          <p className="text-white">{first.weight}lbs × {first.reps}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 mb-1">Current</p>
+                          <p className="text-white">{last.weight}lbs × {last.reps}</p>
+                        </div>
+                      </div>
+                      <div className={`mt-2 flex items-center gap-2 ${gain > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                        {gain > 0 && <ArrowUp size={14} />}
+                        <span className="font-semibold text-sm">{gain > 0 ? '+' : ''}{gain}%</span>
+                      </div>
+                    </div>
+                    
+                    {isExpanded && (
+                      <div className="bg-gray-900 p-3 space-y-2 border-t border-gray-700">
+                        <p className="text-gray-400 text-xs font-semibold mb-2">Workout History</p>
+                        {allLogs.map((log, i) => (
+                          <div key={i} className="flex justify-between items-center text-xs">
+                            <span className="text-gray-400">{log.date} (W{log.week})</span>
+                            <span className="text-white">{log.weight}lbs × {log.reps} reps</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        );
+      };
+
+      const renderTrends = () => {
+        const sortedLogs = [...bodyweightLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        return (
+          <div className="space-y-3">
+            <h2 className="text-lg font-bold text-white">Bodyweight Trends</h2>
+            {sortedLogs.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No bodyweight data yet</p>
+            ) : (
+              <>
+                <div className="bg-gray-800 p-4 rounded-lg">
+                  <div className="h-48 relative">
+                    <svg viewBox="0 0 300 150" className="w-full h-full">
+                      {sortedLogs.map((log, i) => {
+                        if (i === 0) return null;
+                        const prevLog = sortedLogs[i - 1];
+                        const x1 = (i - 1) * (300 / (sortedLogs.length - 1));
+                        const x2 = i * (300 / (sortedLogs.length - 1));
+                        const minW = Math.min(...sortedLogs.map(l => l.weight));
+                        const maxW = Math.max(...sortedLogs.map(l => l.weight));
+                        const range = maxW - minW || 1;
+                        const y1 = 150 - ((prevLog.weight - minW) / range * 130 + 10);
+                        const y2 = 150 - ((log.weight - minW) / range * 130 + 10);
+                        
+                        return (
+                          <line
+                            key={i}
+                            x1={x1}
+                            y1={y1}
+                            x2={x2}
+                            y2={y2}
+                            stroke="#3b82f6"
+                            strokeWidth="2"
+                          />
+                        );
+                      })}
+                    </svg>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {sortedLogs.reverse().map((log, i) => (
+                    <div key={i} className="bg-gray-800 p-3 rounded flex justify-between text-sm">
+                      <span className="text-gray-400">{log.date}</span>
+                      <span className="text-white font-semibold">{log.weight} lbs</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-950 text-white pb-20">
+          {/* Header with Menu */}
+          <div className="bg-gray-900 border-b border-gray-800 p-4">
+            <div className="max-w-md mx-auto flex justify-between items-center">
+              <h1 className="text-xl font-bold">Workout Tracker</h1>
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2 hover:bg-gray-800 rounded"
+              >
+                <Menu size={24} />
+              </button>
+            </div>
+          </div>
+
+          {/* Dropdown Menu */}
+          {showMenu && (
+            <div className="bg-gray-900 border-b border-gray-800">
+              <div className="max-w-md mx-auto p-4 space-y-2">
+                <button
+                  onClick={exportData}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 rounded-lg text-white hover:bg-gray-700"
+                >
+                  <Download size={20} />
+                  <span>Export Data</span>
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 rounded-lg text-white hover:bg-gray-700"
+                >
+                  <Upload size={20} />
+                  <span>Import Data</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={importData}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="max-w-md mx-auto p-4">
+            {tab === 'today' && renderToday()}
+            {tab === 'schedule' && renderSchedule()}
+            {tab === 'strength' && renderStrength()}
+            {tab === 'trends' && renderTrends()}
+          </div>
+
+          <nav className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800">
+            <div className="max-w-md mx-auto flex justify-around py-3">
+              <button
+                onClick={() => setTab('today')}
+                className={`flex flex-col items-center gap-1 ${tab === 'today' ? 'text-blue-400' : 'text-gray-400'}`}
+              >
+                <Dumbbell size={20} />
+                <span className="text-xs">Today</span>
+              </button>
+              <button
+                onClick={() => setTab('schedule')}
+                className={`flex flex-col items-center gap-1 ${tab === 'schedule' ? 'text-blue-400' : 'text-gray-400'}`}
+              >
+                <Calendar size={20} />
+                <span className="text-xs">Schedule</span>
+              </button>
+              <button
+                onClick={() => setTab('strength')}
+                className={`flex flex-col items-center gap-1 ${tab === 'strength' ? 'text-blue-400' : 'text-gray-400'}`}
+              >
+                <TrendingUp size={20} />
+                <span className="text-xs">Strength</span>
+              </button>
+              <button
+                onClick={() => setTab('trends')}
+                className={`flex flex-col items-center gap-1 ${tab === 'trends' ? 'text-blue-400' : 'text-gray-400'}`}
+              >
+                <TrendingUp size={20} />
+                <span className="text-xs">Trends</span>
+              </button>
+            </div>
+          </nav>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<WorkoutTracker />, document.getElementById('root'));
+  </script>
+</body>
+</html>
