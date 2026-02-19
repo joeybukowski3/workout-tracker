@@ -1,0 +1,16 @@
+﻿{
+  "id": "program-1",
+  "name": "Program 1",
+  "durationWeeks": 6,
+  "scheduleType": "dayOfWeek",
+  "guideFile": "PROGRAM_GUIDE.txt",
+  "fileMap": {
+    "mon": "monday_workout.csv",
+    "tue": "tuesday_workout.csv",
+    "wed": "wednesday_workout.csv",
+    "thu": "thursday_workout.csv",
+    "fri": "friday_workout.csv",
+    "sat": "saturday_workout.csv",
+    "sun": "sunday_rest.csv"
+  }
+}

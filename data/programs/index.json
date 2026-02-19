@@ -1,9 +1,9 @@
 ﻿{
   "programs": [
     {
-      "id": "newwork26",
-      "name": "New Work 2026",
-      "path": "data/programs/newwork26/program.json"
+      "id": "program-1",
+      "name": "Program 1",
+      "path": "data/programs/program-1/program.json"
     }
   ]
 }

@@ -16,13 +16,14 @@
 </head>
 <body>
   <div id="root"></div>
-  
+
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
-    
+
     const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const STORAGE_KEY = 'workoutTrackerDataV2';
-    const LEGACY_KEY = 'workoutData';
+    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const STORAGE_KEY = 'workoutAppState';
+    const APP_VERSION = 1;
 
     const DAILY_STRETCHES = [
       '90/90 Hip Switch',
@@ -143,143 +144,76 @@
       return result.map(value => value.trim());
     };
 
-    const dayNumberToName = (dayNumber) => DAYS[dayNumber - 1] || 'Unknown';
-
-    const isDayComplete = (completionMap, week, day) => {
-      return completionMap?.[week]?.[day]?.completed === true;
+    const toLocalDateString = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     };
 
-    const markDayComplete = (completionMap, week, day, date) => {
-      const updated = { ...completionMap };
-      if (!updated[week]) updated[week] = {};
-      updated[week][day] = { completed: true, date };
-      return updated;
+    const parseLocalDate = (value) => {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(year, month - 1, day);
     };
 
-    const getNextIncomplete = (completionMap, startWeek, startDay, durationWeeks) => {
-      for (let week = startWeek; week <= durationWeeks; week += 1) {
-        for (let day = week === startWeek ? startDay : 1; day <= 7; day += 1) {
-          if (!isDayComplete(completionMap, week, day)) {
-            return { week, day };
-          }
-        }
-      }
-      return null;
+    const diffInDays = (start, end) => {
+      const startAtNoon = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0);
+      const endAtNoon = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 12, 0, 0);
+      const msPerDay = 24 * 60 * 60 * 1000;
+      return Math.floor((endAtNoon - startAtNoon) / msPerDay);
     };
 
-    const isProgramComplete = (completionMap, durationWeeks) => {
-      for (let week = 1; week <= durationWeeks; week += 1) {
-        for (let day = 1; day <= 7; day += 1) {
-          if (!isDayComplete(completionMap, week, day)) return false;
-        }
-      }
-      return true;
+    const slugify = (value) => value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    const getExerciseEmoji = (name) => {
+      const lower = name.toLowerCase();
+      if (lower.includes('walk') || lower.includes('bike')) return '🏃';
+      if (lower.includes('bench') || lower.includes('press') && lower.includes('chest')) return '🏋️';
+      if (lower.includes('deadlift') || lower.includes('squat')) return '💪';
+      if (lower.includes('curl')) return '💪';
+      if (lower.includes('row') || lower.includes('pull')) return '🚣';
+      if (lower.includes('leg') || lower.includes('calf')) return '🦵';
+      if (lower.includes('shoulder') || lower.includes('delt')) return '💪';
+      if (lower.includes('tricep')) return '💪';
+      if (lower.includes('stretch') || lower.includes('mobility')) return '🧘';
+      if (lower.includes('foam') || lower.includes('roll')) return '🧘';
+      return '💪';
     };
 
     function WorkoutTracker() {
       const [tab, setTab] = useState('today');
-      const [viewWeek, setViewWeek] = useState(1);
       const [programs, setPrograms] = useState([]);
       const [programManifest, setProgramManifest] = useState(null);
       const [programBasePath, setProgramBasePath] = useState('');
-      const [programWeekCache, setProgramWeekCache] = useState({});
+      const [programDayCache, setProgramDayCache] = useState({});
       const [programLoadError, setProgramLoadError] = useState('');
       const [programFileWarnings, setProgramFileWarnings] = useState([]);
 
-      const [activeProgramId, setActiveProgramId] = useState('');
-      const [activeWeek, setActiveWeek] = useState(1);
-      const [activeDay, setActiveDay] = useState(1);
-      const [startDate, setStartDate] = useState('');
-      const [lastActivityDate, setLastActivityDate] = useState('');
-      const [completionMap, setCompletionMap] = useState({});
-      const [programProgress, setProgramProgress] = useState({});
+      const [activeProgramId, setActiveProgramId] = useState('program-1');
+      const [programStartDate, setProgramStartDate] = useState('');
+      const [currentWeek, setCurrentWeek] = useState(1);
+      const [completedDays, setCompletedDays] = useState({});
+      const [lastOpenedDate, setLastOpenedDate] = useState('');
 
       const [workoutLogs, setWorkoutLogs] = useState([]);
       const [bodyweightLogs, setBodyweightLogs] = useState([]);
+      const [history, setHistory] = useState([]);
       const [todayWeight, setTodayWeight] = useState('');
       const [todayInputs, setTodayInputs] = useState({});
       const [expandedExercises, setExpandedExercises] = useState({});
       const [expandedHistory, setExpandedHistory] = useState({});
-      const [history, setHistory] = useState([]);
       const [showMenu, setShowMenu] = useState(false);
       const [showStretches, setShowStretches] = useState(false);
+      const [viewWeek, setViewWeek] = useState(1);
       const fileInputRef = useRef(null);
 
-      useEffect(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const data = JSON.parse(saved);
-          setActiveProgramId(data.activeProgramId || '');
-          setActiveWeek(data.activeWeek || 1);
-          setActiveDay(data.activeDay || 1);
-          setStartDate(data.startDate || '');
-          setLastActivityDate(data.lastActivityDate || '');
-          setCompletionMap(data.completionMap || {});
-          setProgramProgress(data.programProgress || {});
-          setWorkoutLogs(data.workoutLogs || []);
-          setBodyweightLogs(data.bodyweightLogs || []);
-          setHistory(data.history || []);
-          setViewWeek(data.activeWeek || 1);
-          return;
-        }
-
-        const legacy = localStorage.getItem(LEGACY_KEY);
-        if (!legacy) return;
-
-        try {
-          const legacyData = JSON.parse(legacy);
-          const migratedLogs = (legacyData.workoutLogs || []).map(log => {
-            const dayNum = new Date(log.date).getDay() + 1;
-            return {
-              ...log,
-              programId: 'newwork26',
-              programName: 'New Work 2026',
-              day: dayNum,
-              dayName: dayNumberToName(dayNum)
-            };
-          });
-          setActiveProgramId('newwork26');
-          setActiveWeek(legacyData.currentWeek || 1);
-          setActiveDay(new Date().getDay() + 1);
-          setStartDate(new Date().toISOString().split('T')[0]);
-          setLastActivityDate('');
-          setCompletionMap({});
-          setProgramProgress({});
-          setWorkoutLogs(migratedLogs);
-          setBodyweightLogs(legacyData.bodyweightLogs || []);
-          setHistory([]);
-          setViewWeek(legacyData.currentWeek || 1);
-        } catch (error) {
-          console.error('Failed to migrate legacy data', error);
-        }
-      }, []);
-
-      useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          dataVersion: 2,
-          activeProgramId,
-          activeWeek,
-          activeDay,
-          startDate,
-          lastActivityDate,
-          completionMap,
-          programProgress,
-          workoutLogs,
-          bodyweightLogs,
-          history
-        }));
-      }, [
-        activeProgramId,
-        activeWeek,
-        activeDay,
-        startDate,
-        lastActivityDate,
-        completionMap,
-        programProgress,
-        workoutLogs,
-        bodyweightLogs,
-        history
-      ]);
+      const today = new Date();
+      const todayStr = toLocalDateString(today);
+      const todayDayKey = DAY_KEYS[today.getDay()];
+      const todayDayName = DAYS[today.getDay()];
 
       useEffect(() => {
         const loadPrograms = async () => {
@@ -290,28 +224,117 @@
             setPrograms(data.programs || []);
           } catch (error) {
             console.error(error);
-            setProgramLoadError('Unable to load program library. Check data/programs/index.json.');
+            setPrograms([{ id: 'program-1', name: 'Program 1', path: 'data/programs/program-1/program.json' }]);
+            setProgramLoadError('Unable to load program library. Using default program.');
           }
         };
         loadPrograms();
       }, []);
 
       useEffect(() => {
-        if (programs.length === 0) return;
-        if (!activeProgramId) {
-          setActiveProgramId(programs[0].id);
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.version === APP_VERSION) {
+            setActiveProgramId(data.activeProgramId || 'program-1');
+            setProgramStartDate(data.programStartDate || todayStr);
+            setCurrentWeek(data.currentWeek || 1);
+            setCompletedDays(data.completedDays || {});
+            setLastOpenedDate(data.lastOpenedDate || todayStr);
+            setWorkoutLogs(data.workoutLogs || []);
+            setBodyweightLogs(data.bodyweightLogs || []);
+            setHistory(data.history || []);
+            setViewWeek(data.currentWeek || 1);
+            return;
+          }
+        }
+
+        const legacyV2 = localStorage.getItem('workoutTrackerDataV2');
+        if (legacyV2) {
+          try {
+            const data = JSON.parse(legacyV2);
+            setActiveProgramId(data.activeProgramId || 'program-1');
+            setProgramStartDate(data.startDate || todayStr);
+            setCurrentWeek(data.activeWeek || 1);
+            setCompletedDays({});
+            setLastOpenedDate(todayStr);
+            setWorkoutLogs(data.workoutLogs || []);
+            setBodyweightLogs(data.bodyweightLogs || []);
+            setHistory(data.history || []);
+            setViewWeek(data.activeWeek || 1);
+            return;
+          } catch (error) {
+            console.error('Failed to migrate V2 data', error);
+          }
+        }
+
+        const legacy = localStorage.getItem('workoutData');
+        if (legacy) {
+          try {
+            const data = JSON.parse(legacy);
+            setActiveProgramId('program-1');
+            setProgramStartDate(todayStr);
+            setCurrentWeek(data.currentWeek || 1);
+            setCompletedDays({});
+            setLastOpenedDate(todayStr);
+            setWorkoutLogs(data.workoutLogs || []);
+            setBodyweightLogs(data.bodyweightLogs || []);
+            setHistory([]);
+            setViewWeek(data.currentWeek || 1);
+            return;
+          } catch (error) {
+            console.error('Failed to migrate legacy data', error);
+          }
+        }
+
+        setProgramStartDate(todayStr);
+        setLastOpenedDate(todayStr);
+      }, [todayStr]);
+
+      useEffect(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          version: APP_VERSION,
+          activeProgramId,
+          programStartDate,
+          currentWeek,
+          completedDays,
+          lastOpenedDate,
+          workoutLogs,
+          bodyweightLogs,
+          history
+        }));
+      }, [
+        activeProgramId,
+        programStartDate,
+        currentWeek,
+        completedDays,
+        lastOpenedDate,
+        workoutLogs,
+        bodyweightLogs,
+        history
+      ]);
+
+      useEffect(() => {
+        if (!programStartDate) return;
+        setLastOpenedDate(todayStr);
+
+        const startDate = parseLocalDate(programStartDate);
+        const daysSinceStart = diffInDays(startDate, today);
+        if (daysSinceStart < 0) {
+          setCurrentWeek(1);
+          setViewWeek(1);
           return;
         }
-        const exists = programs.some(program => program.id === activeProgramId);
-        if (!exists) {
-          setProgramLoadError(`Active program "${activeProgramId}" not found. Falling back to first program.`);
-          setActiveProgramId(programs[0].id);
-        }
-      }, [programs, activeProgramId]);
+
+        const durationWeeks = programManifest?.durationWeeks || 6;
+        const calculatedWeek = Math.min(durationWeeks, Math.floor(daysSinceStart / 7) + 1);
+        setCurrentWeek(calculatedWeek);
+        setViewWeek(calculatedWeek);
+      }, [programStartDate, todayStr, programManifest]);
 
       useEffect(() => {
         if (!activeProgramId || programs.length === 0) return;
-        const selected = programs.find(program => program.id === activeProgramId);
+        const selected = programs.find(program => program.id === activeProgramId) || programs[0];
         if (!selected) return;
 
         const loadProgram = async () => {
@@ -322,7 +345,7 @@
             setProgramManifest(manifest);
             const basePath = selected.path.split('/').slice(0, -1).join('/');
             setProgramBasePath(basePath);
-            setProgramWeekCache({});
+            setProgramDayCache({});
             setProgramFileWarnings([]);
           } catch (error) {
             console.error(error);
@@ -332,42 +355,15 @@
         };
 
         loadProgram();
-
-        const progress = programProgress[activeProgramId];
-        if (progress) {
-          setActiveWeek(progress.activeWeek || 1);
-          setActiveDay(progress.activeDay || 1);
-          setStartDate(progress.startDate || '');
-          setLastActivityDate(progress.lastActivityDate || '');
-          setCompletionMap(progress.completionMap || {});
-          setViewWeek(progress.activeWeek || 1);
-        } else {
-          const today = new Date().toISOString().split('T')[0];
-          setActiveWeek(1);
-          setActiveDay(1);
-          setStartDate(today);
-          setLastActivityDate('');
-          setCompletionMap({});
-          setViewWeek(1);
-        }
       }, [activeProgramId, programs]);
 
       useEffect(() => {
-        if (!activeProgramId) return;
-        setProgramProgress(prev => ({
-          ...prev,
-          [activeProgramId]: {
-            activeWeek,
-            activeDay,
-            startDate,
-            lastActivityDate,
-            completionMap
-          }
-        }));
-      }, [activeProgramId, activeWeek, activeDay, startDate, lastActivityDate, completionMap]);
+        if (!programManifest) return;
+        ensureDayLoaded(todayDayKey);
+      }, [programManifest, todayDayKey]);
 
       useEffect(() => {
-        const exercises = getExercisesForDay(activeWeek, activeDay);
+        const exercises = programDayCache[todayDayKey] || [];
         const defaults = {};
         exercises.forEach(ex => {
           if (!todayInputs[ex]) {
@@ -377,39 +373,194 @@
         if (Object.keys(defaults).length > 0) {
           setTodayInputs(prev => ({ ...prev, ...defaults }));
         }
-      }, [activeWeek, activeDay, programWeekCache]);
+      }, [programDayCache, todayDayKey]);
 
-      useEffect(() => {
-        if (!programManifest) return;
-        ensureWeekLoaded(activeWeek);
-      }, [programManifest, activeWeek]);
+      const getCompletedForProgram = () => completedDays?.[activeProgramId] || {};
 
-      useEffect(() => {
-        if (!programManifest) return;
-        ensureWeekLoaded(viewWeek);
-      }, [programManifest, viewWeek]);
+      const ensureDayLoaded = async (dayKey) => {
+        if (!programManifest || !programBasePath) return;
+        if (programDayCache[dayKey]) return;
+
+        const fileName = programManifest.fileMap?.[dayKey];
+        if (!fileName) {
+          setProgramFileWarnings(prev => [...new Set([...prev, `Missing file map for ${dayKey}`])]);
+          setProgramDayCache(prev => ({ ...prev, [dayKey]: [] }));
+          return;
+        }
+
+        const filePath = `${programBasePath}/${fileName}`;
+        try {
+          const response = await fetch(filePath);
+          if (!response.ok) throw new Error('Missing file');
+          const text = await response.text();
+          const rows = parseCsv(text);
+          const exercises = rows.map(row => row.Exercise).filter(Boolean);
+          setProgramDayCache(prev => ({ ...prev, [dayKey]: exercises }));
+        } catch (error) {
+          console.error(error);
+          setProgramFileWarnings(prev => [...new Set([...prev, `Missing program file: ${fileName}`])]);
+          setProgramDayCache(prev => ({ ...prev, [dayKey]: [] }));
+        }
+      };
+
+      const isCardioExercise = (exerciseName) => {
+        const lower = exerciseName.toLowerCase();
+        return lower.includes('walk') || lower.includes('bike') || lower.includes('run');
+      };
+
+      const getLastWorkout = (exerciseId) => {
+        const logs = workoutLogs.filter(log => log.programId === activeProgramId && log.exerciseId === exerciseId);
+        return logs.length > 0 ? logs[logs.length - 1] : null;
+      };
+
+      const getAllWorkouts = (exerciseId) => {
+        return workoutLogs
+          .filter(log => log.programId === activeProgramId && log.exerciseId === exerciseId)
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+      };
+
+      const calculateGain = (exerciseId) => {
+        const logs = getAllWorkouts(exerciseId).slice().reverse();
+        if (logs.length < 2) return null;
+        const first = logs[0];
+        const last = logs[logs.length - 1];
+        const firstVol = first.weight * first.reps;
+        const lastVol = last.weight * last.reps;
+        const gain = ((lastVol - firstVol) / firstVol * 100).toFixed(1);
+        return { first, last, gain: parseFloat(gain) };
+      };
+
+      const logWorkout = () => {
+        const exercises = programDayCache[todayDayKey] || [];
+        const logs = exercises.map(exName => {
+          const isCardio = isCardioExercise(exName);
+          return {
+            exerciseId: slugify(exName),
+            exerciseName: exName,
+            weight: parseFloat(todayInputs[exName]?.weight || 0),
+            reps: isCardio ? parseFloat(todayInputs[exName]?.reps || 0) : parseInt(todayInputs[exName]?.reps || 0),
+            date: todayStr,
+            week: currentWeek,
+            dayOfWeek: todayDayKey,
+            isCardio,
+            programId: activeProgramId
+          };
+        }).filter(log => log.weight > 0 && log.reps > 0);
+
+        const currentCompleted = getCompletedForProgram();
+        const updatedCompleted = { ...currentCompleted, [todayStr]: true };
+        setCompletedDays(prev => ({
+          ...prev,
+          [activeProgramId]: updatedCompleted
+        }));
+
+        if (logs.length > 0) {
+          setWorkoutLogs(prev => [...prev, ...logs]);
+          setTodayInputs({});
+          alert('Workout logged.');
+        } else {
+          alert('Day marked complete.');
+        }
+
+        checkProgramCompletion(updatedCompleted);
+      };
+
+      const logBodyweight = () => {
+        if (todayWeight && parseFloat(todayWeight) > 0) {
+          setBodyweightLogs(prev => [...prev, { weight: parseFloat(todayWeight), date: todayStr }]);
+          setTodayWeight('');
+          alert('Bodyweight logged.');
+        }
+      };
+
+      const checkProgramCompletion = (completedOverride) => {
+        if (!programStartDate) return;
+        const durationWeeks = programManifest?.durationWeeks || 6;
+        const totalDays = durationWeeks * 7;
+        const startDate = parseLocalDate(programStartDate);
+        const completed = completedOverride || getCompletedForProgram();
+
+        let completedCount = 0;
+        let allComplete = true;
+        for (let i = 0; i < totalDays; i += 1) {
+          const date = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+          const dateStr = toLocalDateString(date);
+          if (completed[dateStr]) {
+            completedCount += 1;
+          } else {
+            allComplete = false;
+          }
+        }
+
+        if (!allComplete) return;
+
+        const existing = history.some(item => item.programId === activeProgramId && item.startDate === programStartDate);
+        if (existing) return;
+
+        const endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + totalDays - 1);
+        const summary = {
+          id: `${activeProgramId}-${programStartDate}`,
+          programId: activeProgramId,
+          programName: programManifest?.name || activeProgramId,
+          startDate: programStartDate,
+          endDate: toLocalDateString(endDate),
+          completedDays: completedCount,
+          totalDays,
+          completionRate: Math.round((completedCount / totalDays) * 100)
+        };
+
+        setHistory(prev => [summary, ...prev]);
+      };
+
+      const getMissedDays = () => {
+        if (!programStartDate) return [];
+        const startDate = parseLocalDate(programStartDate);
+        const daysSinceStart = diffInDays(startDate, today);
+        if (daysSinceStart <= 0) return [];
+
+        const completed = getCompletedForProgram();
+        const missed = [];
+        for (let i = 0; i < daysSinceStart; i += 1) {
+          const date = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+          const dateStr = toLocalDateString(date);
+          if (!completed[dateStr]) {
+            missed.push(dateStr);
+          }
+        }
+        return missed;
+      };
+
+      const resumeProgram = () => {
+        ensureDayLoaded(todayDayKey);
+        setTab('today');
+      };
+
+      const restartProgram = () => {
+        setProgramStartDate(todayStr);
+        setCurrentWeek(1);
+        setViewWeek(1);
+        setCompletedDays(prev => ({ ...prev, [activeProgramId]: {} }));
+      };
 
       const exportData = () => {
         const data = {
-          dataVersion: 2,
+          version: APP_VERSION,
           activeProgramId,
-          activeWeek,
-          activeDay,
-          startDate,
-          lastActivityDate,
-          completionMap,
-          programProgress,
+          programStartDate,
+          currentWeek,
+          completedDays,
+          lastOpenedDate,
           workoutLogs,
           bodyweightLogs,
           history,
           exportDate: new Date().toISOString()
         };
-        
+
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `workout-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `workout-tracker-backup-${todayStr}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -427,41 +578,15 @@
           try {
             const data = JSON.parse(e.target.result);
             if (confirm('This will replace all current data. Continue?')) {
-              if (data.activeProgramId || data.dataVersion === 2) {
-                setActiveProgramId(data.activeProgramId || '');
-                setActiveWeek(data.activeWeek || 1);
-                setActiveDay(data.activeDay || 1);
-                setStartDate(data.startDate || '');
-                setLastActivityDate(data.lastActivityDate || '');
-                setCompletionMap(data.completionMap || {});
-                setProgramProgress(data.programProgress || {});
-                setWorkoutLogs(data.workoutLogs || []);
-                setBodyweightLogs(data.bodyweightLogs || []);
-                setHistory(data.history || []);
-                setViewWeek(data.activeWeek || 1);
-              } else {
-                const migratedLogs = (data.workoutLogs || []).map(log => {
-                  const dayNum = new Date(log.date).getDay() + 1;
-                  return {
-                    ...log,
-                    programId: 'newwork26',
-                    programName: 'New Work 2026',
-                    day: dayNum,
-                    dayName: dayNumberToName(dayNum)
-                  };
-                });
-                setActiveProgramId('newwork26');
-                setActiveWeek(data.currentWeek || 1);
-                setActiveDay(new Date().getDay() + 1);
-                setStartDate(new Date().toISOString().split('T')[0]);
-                setLastActivityDate('');
-                setCompletionMap({});
-                setProgramProgress({});
-                setWorkoutLogs(migratedLogs);
-                setBodyweightLogs(data.bodyweightLogs || []);
-                setHistory([]);
-                setViewWeek(data.currentWeek || 1);
-              }
+              setActiveProgramId(data.activeProgramId || 'program-1');
+              setProgramStartDate(data.programStartDate || todayStr);
+              setCurrentWeek(data.currentWeek || 1);
+              setCompletedDays(data.completedDays || {});
+              setLastOpenedDate(data.lastOpenedDate || todayStr);
+              setWorkoutLogs(data.workoutLogs || []);
+              setBodyweightLogs(data.bodyweightLogs || []);
+              setHistory(data.history || []);
+              setViewWeek(data.currentWeek || 1);
               setShowMenu(false);
               alert('Data imported successfully.');
             }
@@ -473,266 +598,10 @@
         event.target.value = '';
       };
 
-      const ensureWeekLoaded = async (week) => {
-        if (!programManifest || !programBasePath) return;
-        if (programWeekCache[week]) return;
-
-        const schedule = programManifest.schedule?.[String(week)] || {};
-        const warnings = [];
-
-        const dayPromises = DAYS.map(async (dayName) => {
-          const fileName = schedule[dayName];
-          if (!fileName) return { dayName, exercises: [] };
-          const filePath = `${programBasePath}/${fileName}`;
-          try {
-            const response = await fetch(filePath);
-            if (!response.ok) throw new Error('Missing file');
-            const text = await response.text();
-            const rows = parseCsv(text);
-            const exercises = rows.map(row => row.Exercise).filter(Boolean);
-            return { dayName, exercises };
-          } catch (error) {
-            warnings.push(`Missing program file: ${fileName}`);
-            return { dayName, exercises: [] };
-          }
-        });
-
-        const results = await Promise.all(dayPromises);
-        setProgramWeekCache(prev => ({
-          ...prev,
-          [week]: results.reduce((acc, entry) => {
-            acc[entry.dayName] = entry.exercises;
-            return acc;
-          }, {})
-        }));
-        if (warnings.length > 0) {
-          setProgramFileWarnings(prev => [...new Set([...prev, ...warnings])]);
-        }
-      };
-
-      const getExercisesForDay = (week, dayNumber) => {
-        const dayName = dayNumberToName(dayNumber);
-        return programWeekCache?.[week]?.[dayName] || [];
-      };
-
-      const isCardioExercise = (exerciseName) => {
-        const lower = exerciseName.toLowerCase();
-        return lower.includes('walk') || lower.includes('bike') || lower.includes('run');
-      };
-
-      const logWorkout = () => {
-        const today = new Date().toISOString().split('T')[0];
-        const dayName = dayNumberToName(activeDay);
-        const exercises = getExercisesForDay(activeWeek, activeDay);
-        
-        const logs = exercises.map(exName => {
-          const isCardio = isCardioExercise(exName);
-          return {
-            exerciseName: exName,
-            weight: parseFloat(todayInputs[exName]?.weight || 0),
-            reps: isCardio ? parseFloat(todayInputs[exName]?.reps || 0) : parseInt(todayInputs[exName]?.reps || 0),
-            date: today,
-            week: activeWeek,
-            day: activeDay,
-            dayName,
-            isCardio: isCardio,
-            programId: activeProgramId,
-            programName: programManifest?.name || activeProgramId
-          };
-        }).filter(log => log.weight > 0 && log.reps > 0);
-
-        const updatedCompletion = markDayComplete(completionMap, activeWeek, activeDay, today);
-        setCompletionMap(updatedCompletion);
-        setLastActivityDate(today);
-
-        if (logs.length > 0) {
-          setWorkoutLogs(prev => [...prev, ...logs]);
-          setTodayInputs({});
-          alert('Workout logged.');
-        } else {
-          alert('Day marked complete.');
-        }
-
-        const duration = programManifest?.durationWeeks || 6;
-        const next = getNextIncomplete(updatedCompletion, activeWeek, activeDay + 1, duration)
-          || getNextIncomplete(updatedCompletion, activeWeek + 1, 1, duration);
-        if (next) {
-          setActiveWeek(next.week);
-          setActiveDay(next.day);
-          setViewWeek(next.week);
-        } else if (isProgramComplete(updatedCompletion, duration)) {
-          finalizeProgramCompletion(updatedCompletion, today);
-        }
-      };
-
-      const logBodyweight = () => {
-        const today = new Date().toISOString().split('T')[0];
-        if (todayWeight && parseFloat(todayWeight) > 0) {
-          setBodyweightLogs(prev => [...prev, { weight: parseFloat(todayWeight), date: today }]);
-          setTodayWeight('');
-          alert('Bodyweight logged.');
-        }
-      };
-
-      const getLastWorkout = (exerciseName) => {
-        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName && log.programId === activeProgramId);
-        return logs.length > 0 ? logs[logs.length - 1] : null;
-      };
-
-      const getFirstWorkout = (exerciseName) => {
-        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName && log.programId === activeProgramId);
-        return logs.length > 0 ? logs[0] : null;
-      };
-
-      const getAllWorkouts = (exerciseName) => {
-        return workoutLogs
-          .filter(log => log.exerciseName === exerciseName && log.programId === activeProgramId)
-          .sort((a, b) => new Date(b.date) - new Date(a.date));
-      };
-
-      const calculateGain = (exerciseName) => {
-        const first = getFirstWorkout(exerciseName);
-        const last = getLastWorkout(exerciseName);
-        if (!first || !last) return null;
-        
-        const firstVol = first.weight * first.reps;
-        const lastVol = last.weight * last.reps;
-        const gain = ((lastVol - firstVol) / firstVol * 100).toFixed(1);
-        return { first, last, gain: parseFloat(gain) };
-      };
-
-      const getExerciseEmoji = (name) => {
-        const lower = name.toLowerCase();
-        if (lower.includes('walk') || lower.includes('bike')) return '🏃';
-        if (lower.includes('bench') || lower.includes('press') && lower.includes('chest')) return '🏋️';
-        if (lower.includes('deadlift') || lower.includes('squat')) return '💪';
-        if (lower.includes('curl')) return '💪';
-        if (lower.includes('row') || lower.includes('pull')) return '🚣';
-        if (lower.includes('leg') || lower.includes('calf')) return '🦵';
-        if (lower.includes('shoulder') || lower.includes('delt')) return '💪';
-        if (lower.includes('tricep')) return '💪';
-        if (lower.includes('stretch') || lower.includes('mobility')) return '🧘';
-        if (lower.includes('foam') || lower.includes('roll')) return '🧘';
-        return '💪';
-      };
-
-      const toggleExpanded = (exerciseName) => {
-        setExpandedExercises(prev => ({
-          ...prev,
-          [exerciseName]: !prev[exerciseName]
-        }));
-      };
-
-      const toggleHistoryExpanded = (historyId) => {
-        setExpandedHistory(prev => ({
-          ...prev,
-          [historyId]: !prev[historyId]
-        }));
-      };
-
-      const finalizeProgramCompletion = (updatedCompletion, completionDate) => {
-        const duration = programManifest?.durationWeeks || 6;
-        if (!isProgramComplete(updatedCompletion, duration)) return;
-        const programName = programManifest?.name || activeProgramId;
-        const summaryId = `${activeProgramId}-${startDate || completionDate}`;
-        const alreadyExists = history.some(item => item.id === summaryId);
-        if (alreadyExists) return;
-
-        const filteredLogs = workoutLogs.filter(log => log.programId === activeProgramId)
-          .filter(log => !startDate || log.date >= startDate)
-          .filter(log => log.date <= completionDate);
-        const filteredBodyweight = bodyweightLogs
-          .filter(log => !startDate || log.date >= startDate)
-          .filter(log => log.date <= completionDate);
-
-        const bestByExercise = {};
-        filteredLogs.forEach(log => {
-          const volume = log.weight * log.reps;
-          if (!bestByExercise[log.exerciseName] || bestByExercise[log.exerciseName].volume < volume) {
-            bestByExercise[log.exerciseName] = {
-              exercise: log.exerciseName,
-              bestWeight: log.weight,
-              bestReps: log.reps,
-              volume
-            };
-          }
-        });
-        const topLifts = Object.values(bestByExercise)
-          .sort((a, b) => b.volume - a.volume)
-          .slice(0, 5);
-
-        const totalDays = duration * 7;
-        let completedDays = 0;
-        for (let week = 1; week <= duration; week += 1) {
-          for (let day = 1; day <= 7; day += 1) {
-            if (isDayComplete(updatedCompletion, week, day)) completedDays += 1;
-          }
-        }
-
-        const bodyweightStart = filteredBodyweight[0]?.weight ?? null;
-        const bodyweightEnd = filteredBodyweight[filteredBodyweight.length - 1]?.weight ?? null;
-        let bodyweightTrend = 'No data';
-        if (bodyweightStart !== null && bodyweightEnd !== null) {
-          if (bodyweightEnd > bodyweightStart) bodyweightTrend = 'Up';
-          if (bodyweightEnd < bodyweightStart) bodyweightTrend = 'Down';
-          if (bodyweightEnd === bodyweightStart) bodyweightTrend = 'Flat';
-        }
-
-        const summary = {
-          id: summaryId,
-          programId: activeProgramId,
-          programName,
-          startDate: startDate || completionDate,
-          endDate: completionDate,
-          totalDays,
-          completedDays,
-          completionRate: Math.round((completedDays / totalDays) * 100),
-          totalWorkouts: filteredLogs.length,
-          topLifts,
-          bodyweight: {
-            start: bodyweightStart,
-            end: bodyweightEnd,
-            change: bodyweightStart !== null && bodyweightEnd !== null ? (bodyweightEnd - bodyweightStart).toFixed(1) : null,
-            trend: bodyweightTrend
-          }
-        };
-
-        setHistory(prev => [summary, ...prev]);
-      };
-
-      const resumeProgram = () => {
-        const duration = programManifest?.durationWeeks || 6;
-        const next = getNextIncomplete(completionMap, activeWeek, activeDay, duration)
-          || getNextIncomplete(completionMap, 1, 1, duration);
-        if (next) {
-          setActiveWeek(next.week);
-          setActiveDay(next.day);
-          setViewWeek(next.week);
-        } else {
-          alert('Program complete. Start a new cycle to continue.');
-        }
-      };
-
-      const restartProgram = () => {
-        const today = new Date().toISOString().split('T')[0];
-        setActiveWeek(1);
-        setActiveDay(1);
-        setStartDate(today);
-        setLastActivityDate('');
-        setCompletionMap({});
-        setViewWeek(1);
-      };
-
-      const startOverAtBeginning = () => {
-        setActiveWeek(1);
-        setActiveDay(1);
-        setViewWeek(1);
-      };
-
       const renderToday = () => {
-        const dayName = dayNumberToName(activeDay);
-        const exercises = getExercisesForDay(activeWeek, activeDay);
-        const isComplete = isDayComplete(completionMap, activeWeek, activeDay);
+        const exercises = programDayCache[todayDayKey] || [];
+        const completed = getCompletedForProgram()[todayStr];
+        const missedDays = getMissedDays();
 
         return (
           <div className="space-y-3">
@@ -744,7 +613,7 @@
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-gray-400">Progress</p>
-                  <p className="text-sm text-white">Week {activeWeek} Day {activeDay}</p>
+                  <p className="text-sm text-white">Week {currentWeek} · {todayDayName}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -752,16 +621,16 @@
                   Resume
                 </button>
                 <button onClick={restartProgram} className="flex-1 px-3 py-2 bg-gray-700 rounded text-white text-xs">
-                  Restart Program
-                </button>
-                <button onClick={startOverAtBeginning} className="flex-1 px-3 py-2 bg-gray-700 rounded text-white text-xs">
-                  Start Over at Week 1 Day 1
+                  Restart
                 </button>
               </div>
               <div className="flex justify-between text-xs text-gray-400">
-                <span>Start: {startDate || 'Not set'}</span>
-                <span>Last activity: {lastActivityDate || 'None'}</span>
+                <span>Start: {programStartDate || 'Not set'}</span>
+                <span>Last opened: {lastOpenedDate || 'None'}</span>
               </div>
+              {missedDays.length > 0 && (
+                <p className="text-xs text-yellow-400">Missed days: {missedDays.length}</p>
+              )}
             </div>
 
             <div className="bg-gray-800 p-3 rounded-lg">
@@ -782,15 +651,15 @@
             </div>
 
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-white">{dayName} - Week {activeWeek}</h2>
-              {isComplete && (
+              <h2 className="text-lg font-bold text-white">{todayDayName} - Week {currentWeek}</h2>
+              {completed && (
                 <span className="text-xs text-green-400">Completed</span>
               )}
             </div>
 
             {exercises.length === 0 ? (
               <div className="text-center py-12 text-gray-400 space-y-3">
-                <p>No workout scheduled for {dayName}</p>
+                <p>No workout scheduled for {todayDayName}</p>
                 <button
                   onClick={logWorkout}
                   className="px-4 py-2 bg-green-600 rounded text-white text-sm"
@@ -801,9 +670,10 @@
             ) : (
               <>
                 {exercises.map((exName, idx) => {
-                  const last = getLastWorkout(exName);
+                  const exerciseId = slugify(exName);
+                  const last = getLastWorkout(exerciseId);
                   const isCardio = isCardioExercise(exName);
-                  
+
                   return (
                     <div key={idx} className="bg-gray-800 p-3 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
@@ -858,14 +728,13 @@
                     </div>
                   );
                 })}
-                <button 
+                <button
                   onClick={logWorkout}
                   className="w-full py-3 bg-green-600 rounded-lg text-white font-semibold"
                 >
                   Complete Workout
                 </button>
 
-                {/* Daily Stretches */}
                 <div className="bg-gray-800 rounded-lg overflow-hidden">
                   <button
                     onClick={() => setShowStretches(!showStretches)}
@@ -892,9 +761,8 @@
       };
 
       const renderSchedule = () => {
-        const schedule = programWeekCache[viewWeek] || {};
         const duration = programManifest?.durationWeeks || 6;
-        
+
         return (
           <div className="space-y-3">
             <div className="flex justify-between items-center">
@@ -911,16 +779,24 @@
                 ))}
               </div>
             </div>
-            
-            {DAYS.map(day => (
-              <div key={day} className="bg-gray-800 p-3 rounded-lg">
-                <h3 className="text-white font-semibold mb-2 text-sm">{day}</h3>
-                {(schedule[day] || []).length === 0 ? (
-                  <p className="text-gray-400 text-sm">Rest Day</p>
+
+            {DAY_KEYS.map((dayKey, idx) => (
+              <div key={dayKey} className="bg-gray-800 p-3 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-white font-semibold text-sm">{DAYS[idx]}</h3>
+                  <button
+                    onClick={() => ensureDayLoaded(dayKey)}
+                    className="text-xs text-gray-400"
+                  >
+                    Load
+                  </button>
+                </div>
+                {(programDayCache[dayKey] || []).length === 0 ? (
+                  <p className="text-gray-400 text-sm">Rest Day / Not loaded</p>
                 ) : (
                   <div className="space-y-1">
-                    {(schedule[day] || []).map((exName, idx) => (
-                      <div key={idx} className="text-gray-300 text-xs">
+                    {(programDayCache[dayKey] || []).map((exName, exIdx) => (
+                      <div key={exIdx} className="text-gray-300 text-xs">
                         {getExerciseEmoji(exName)} {exName}
                       </div>
                     ))}
@@ -935,32 +811,32 @@
       const renderStrength = () => {
         const exercisesWithData = [...new Set(workoutLogs
           .filter(log => log.programId === activeProgramId)
-          .map(log => log.exerciseName))];
-        
+          .map(log => log.exerciseId))];
+
         return (
           <div className="space-y-3">
             <h2 className="text-lg font-bold text-white">Strength Progress</h2>
             {exercisesWithData.length === 0 ? (
               <p className="text-gray-400 text-center py-8">No workout data yet. Start logging!</p>
             ) : (
-              exercisesWithData.map((exName, idx) => {
-                const progress = calculateGain(exName);
-                const allLogs = getAllWorkouts(exName);
-                const isExpanded = expandedExercises[exName];
-                
-                if (!progress) return null;
-                
-                const { first, last, gain } = progress;
-                const isCardio = isCardioExercise(exName);
-                
+              exercisesWithData.map((exerciseId, idx) => {
+                const allLogs = getAllWorkouts(exerciseId);
+                const last = allLogs[0];
+                const progress = calculateGain(exerciseId);
+                const isExpanded = expandedExercises[exerciseId];
+                if (!last || !progress) return null;
+
+                const { first, gain } = progress;
+                const isCardio = last.isCardio;
+
                 return (
                   <div key={idx} className="bg-gray-800 rounded-lg overflow-hidden">
                     <div className="p-3">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">{getExerciseEmoji(exName)}</span>
-                        <h3 className="text-white font-medium text-sm flex-1">{exName}</h3>
+                        <span className="text-xl">{getExerciseEmoji(last.exerciseName)}</span>
+                        <h3 className="text-white font-medium text-sm flex-1">{last.exerciseName}</h3>
                         <button
-                          onClick={() => toggleExpanded(exName)}
+                          onClick={() => setExpandedExercises(prev => ({ ...prev, [exerciseId]: !prev[exerciseId] }))}
                           className="text-gray-400"
                         >
                           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -981,13 +857,13 @@
                         <span className="font-semibold text-sm">{gain > 0 ? '+' : ''}{gain}%</span>
                       </div>
                     </div>
-                    
+
                     {isExpanded && (
                       <div className="bg-gray-900 p-3 space-y-2 border-t border-gray-700">
                         <p className="text-gray-400 text-xs font-semibold mb-2">Workout History</p>
                         {allLogs.map((log, i) => (
                           <div key={i} className="flex justify-between items-center text-xs">
-                            <span className="text-gray-400">{log.date} (W{log.week} D{log.day})</span>
+                            <span className="text-gray-400">{log.date} (W{log.week})</span>
                             <span className="text-white">{log.weight}{log.isCardio ? '°' : 'lbs'} × {log.reps} {log.isCardio ? 'mi' : 'reps'}</span>
                           </div>
                         ))}
@@ -1003,7 +879,7 @@
 
       const renderTrends = () => {
         const sortedLogs = [...bodyweightLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
-        
+
         return (
           <div className="space-y-3">
             <h2 className="text-lg font-bold text-white">Bodyweight Trends</h2>
@@ -1024,7 +900,7 @@
                         const range = maxW - minW || 1;
                         const y1 = 150 - ((prevLog.weight - minW) / range * 130 + 10);
                         const y2 = 150 - ((log.weight - minW) / range * 130 + 10);
-                        
+
                         return (
                           <line
                             key={i}
@@ -1054,64 +930,41 @@
         );
       };
 
-      const renderHistory = () => {
-        return (
-          <div className="space-y-3">
-            <h2 className="text-lg font-bold text-white">Program History</h2>
-            {history.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">No completed programs yet.</p>
-            ) : (
-              history.map(item => {
-                const isExpanded = expandedHistory[item.id];
-                return (
-                  <div key={item.id} className="bg-gray-800 rounded-lg overflow-hidden">
-                    <button
-                      onClick={() => toggleHistoryExpanded(item.id)}
-                      className="w-full p-3 flex items-center justify-between"
-                    >
-                      <div className="text-left">
-                        <p className="text-white font-semibold text-sm">{item.programName}</p>
-                        <p className="text-xs text-gray-400">{item.startDate} to {item.endDate}</p>
-                      </div>
-                      {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-                    </button>
-                    {isExpanded && (
-                      <div className="bg-gray-900 p-3 space-y-3 border-t border-gray-700">
-                        <div className="text-xs text-gray-300 space-y-1">
-                          <p>Completed days: {item.completedDays} / {item.totalDays} ({item.completionRate}%)</p>
-                          <p>Total workouts logged: {item.totalWorkouts}</p>
-                        </div>
-                        <div className="text-xs text-gray-300 space-y-1">
-                          <p className="text-gray-400 font-semibold">Top Lifts</p>
-                          {item.topLifts.length === 0 ? (
-                            <p>No lift data.</p>
-                          ) : (
-                            item.topLifts.map((lift, idx) => (
-                              <p key={idx}>{lift.exercise}: {lift.bestWeight} x {lift.bestReps}</p>
-                            ))
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-300 space-y-1">
-                          <p className="text-gray-400 font-semibold">Bodyweight Trend</p>
-                          {item.bodyweight.start === null ? (
-                            <p>No bodyweight logs in range.</p>
-                          ) : (
-                            <p>{item.bodyweight.start} lbs to {item.bodyweight.end} lbs ({item.bodyweight.change} lbs, {item.bodyweight.trend})</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        );
-      };
+      const renderHistory = () => (
+        <div className="space-y-3">
+          <h2 className="text-lg font-bold text-white">Program History</h2>
+          {history.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No completed programs yet.</p>
+          ) : (
+            history.map(item => {
+              const isExpanded = expandedHistory[item.id];
+              return (
+                <div key={item.id} className="bg-gray-800 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setExpandedHistory(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                    className="w-full p-3 flex items-center justify-between"
+                  >
+                    <div className="text-left">
+                      <p className="text-white font-semibold text-sm">{item.programName}</p>
+                      <p className="text-xs text-gray-400">{item.startDate} to {item.endDate}</p>
+                    </div>
+                    {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                  </button>
+                  {isExpanded && (
+                    <div className="bg-gray-900 p-3 space-y-2 border-t border-gray-700 text-xs text-gray-300">
+                      <p>Completed days: {item.completedDays} / {item.totalDays} ({item.completionRate}%)</p>
+                      <p>Program ID: {item.programId}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      );
 
       return (
         <div className="min-h-screen bg-gray-950 text-white pb-20">
-          {/* Header with Menu */}
           <div className="bg-gray-900 border-b border-gray-800 p-4">
             <div className="max-w-md mx-auto flex justify-between items-center">
               <h1 className="text-xl font-bold">Workout Tracker</h1>
@@ -1124,7 +977,6 @@
             </div>
           </div>
 
-          {/* Dropdown Menu */}
           {showMenu && (
             <div className="bg-gray-900 border-b border-gray-800">
               <div className="max-w-md mx-auto p-4 space-y-2">
