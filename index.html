@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -21,45 +21,8 @@
     const { useState, useEffect, useRef } = React;
     
     const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    const WEEKLY_SCHEDULES = {
-      1: {
-        Monday: ['Walk 1 mile', 'Incline Dumbbell Bench Press', 'Flat Dumbbell Bench Press', 'Cable Fly', 'EZ-Bar Skull Crushers', 'Hanging Leg Raise'],
-        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Glute Bridge / Hip Thrust', 'Seated Hamstring Curl', 'Standing Calf Raises', 'Pallof Press', 'Terminal Knee Extension'],
-        Wednesday: ['Walk 1 mile', 'Lat Pulldown', 'Chest-Supported Row', 'Face Pulls', 'EZ Bar Curl', 'Incline Dumbbell Curl'],
-        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Woodchoppers', 'Bird Dogs', 'Side Plank Raises', 'Stability Ball Rollout', 'Tricep Pushdowns'],
-        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Seated Shoulder Press', 'Low Row', 'Overhead Tricep Extension', 'Cable Crunch'],
-        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Flexor Stretch', 'Hamstring Stretch'],
-        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
-      },
-      2: {
-        Monday: ['Walk 1 mile', 'Incline Barbell Bench Press', 'Flat Dumbbell Bench Press', 'Cable Fly (low-to-high)', 'Skull Crushers', 'Hanging Knee Raise'],
-        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Split Squat', 'Seated Hamstring Curl', 'Standing Calf Raise', 'Pallof Press Iso Hold'],
-        Wednesday: ['Walk 1 mile', 'Pull-Ups or Assisted Pull-Ups', 'Chest-Supported Row', 'Rear Delt Fly', 'Hammer Curl', 'Preacher Curl'],
-        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Lift (low-to-high)', 'Bird Dogs', 'Side Plank', 'Stability Ball Rollout', 'Tricep Pushdowns'],
-        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Machine Shoulder Press', 'Low Row', 'Rope Pressdown', 'Weighted Cable Crunch'],
-        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Mobility', 'Hamstring Stretch'],
-        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
-      },
-      3: {
-        Monday: ['Walk 1 mile', 'Reverse-Grip Bench Press', 'Seated Dumbbell Arnold Press', 'Cable Fly', 'EZ-Bar Skull Crushers', 'Hanging Leg Raise'],
-        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Glute Bridge Hold', 'Seated Hamstring Curl', 'Seated Calf Raise', 'Pallof Press'],
-        Wednesday: ['Walk 1 mile', 'Wide-Grip Seated Row', 'Straight-Arm Pulldown', 'Rear Delt Fly', 'Spider Curl', 'Hammer Curl'],
-        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Woodchoppers', 'Bird Dogs', 'Side Plank Rotations', 'Stability Ball Rollout', 'Tricep Pushdowns'],
-        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Machine Shoulder Press', 'Cable Row', 'Overhead Tricep Extension', 'Cable Crunch'],
-        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Flexor Stretch', 'Hamstring Stretch'],
-        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
-      },
-      4: {
-        Monday: ['Walk 1 mile', 'Incline Bench Press', 'Seated Dumbbell Shoulder Press', 'Cable Fly', 'Cable Rope Pressdown', 'Hanging Knee Raise'],
-        Tuesday: ['Walk 1 mile', 'Romanian Deadlift', 'Split Squat (short stride)', 'Seated Hamstring Curl', 'Standing Calf Raises', 'Pallof Press'],
-        Wednesday: ['Walk 1 mile', 'Lat Pulldown', 'Single-Arm Dumbbell Row', 'Rear Delt Fly', 'Incline Dumbbell Curl', 'Reverse Curl'],
-        Thursday: ['Walk 1 mile', 'Farmer Walk', 'Cable Woodchoppers', 'Bird Dogs', 'Weighted Plank', 'Stability Ball Rollout', 'Tricep Pushdowns'],
-        Friday: ['Walk 1 mile', 'Dumbbell Chest Press', 'Machine Shoulder Press', 'Low Row', 'Overhead Tricep Extension', 'Weighted Cable Crunch'],
-        Saturday: ['Walk 1 mile', 'Stationary Bike', 'Foam Rolling', 'Hip Mobility', 'Hamstring Stretch'],
-        Sunday: ['Walk 1 mile', 'Mobility Flow', 'Balance Ball Leg Curls', 'Stretch']
-      }
-    };
+    const STORAGE_KEY = 'workoutTrackerDataV2';
+    const LEGACY_KEY = 'workoutData';
 
     const DAILY_STRETCHES = [
       '90/90 Hip Switch',
@@ -140,40 +103,271 @@
       </svg>
     );
 
+    const parseCsv = (text) => {
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length === 0) return [];
+      const headers = parseCsvLine(lines[0]);
+      return lines.slice(1).map(line => {
+        const values = parseCsvLine(line);
+        const row = {};
+        headers.forEach((header, idx) => {
+          row[header] = values[idx] ?? '';
+        });
+        return row;
+      });
+    };
+
+    const parseCsvLine = (line) => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        if (char === '"' && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+          continue;
+        }
+        if (char === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (char === ',' && !inQuotes) {
+          result.push(current);
+          current = '';
+          continue;
+        }
+        current += char;
+      }
+      result.push(current);
+      return result.map(value => value.trim());
+    };
+
+    const dayNumberToName = (dayNumber) => DAYS[dayNumber - 1] || 'Unknown';
+
+    const isDayComplete = (completionMap, week, day) => {
+      return completionMap?.[week]?.[day]?.completed === true;
+    };
+
+    const markDayComplete = (completionMap, week, day, date) => {
+      const updated = { ...completionMap };
+      if (!updated[week]) updated[week] = {};
+      updated[week][day] = { completed: true, date };
+      return updated;
+    };
+
+    const getNextIncomplete = (completionMap, startWeek, startDay, durationWeeks) => {
+      for (let week = startWeek; week <= durationWeeks; week += 1) {
+        for (let day = week === startWeek ? startDay : 1; day <= 7; day += 1) {
+          if (!isDayComplete(completionMap, week, day)) {
+            return { week, day };
+          }
+        }
+      }
+      return null;
+    };
+
+    const isProgramComplete = (completionMap, durationWeeks) => {
+      for (let week = 1; week <= durationWeeks; week += 1) {
+        for (let day = 1; day <= 7; day += 1) {
+          if (!isDayComplete(completionMap, week, day)) return false;
+        }
+      }
+      return true;
+    };
+
     function WorkoutTracker() {
       const [tab, setTab] = useState('today');
-      const [currentWeek, setCurrentWeek] = useState(1);
+      const [viewWeek, setViewWeek] = useState(1);
+      const [programs, setPrograms] = useState([]);
+      const [programManifest, setProgramManifest] = useState(null);
+      const [programBasePath, setProgramBasePath] = useState('');
+      const [programWeekCache, setProgramWeekCache] = useState({});
+      const [programLoadError, setProgramLoadError] = useState('');
+      const [programFileWarnings, setProgramFileWarnings] = useState([]);
+
+      const [activeProgramId, setActiveProgramId] = useState('');
+      const [activeWeek, setActiveWeek] = useState(1);
+      const [activeDay, setActiveDay] = useState(1);
+      const [startDate, setStartDate] = useState('');
+      const [lastActivityDate, setLastActivityDate] = useState('');
+      const [completionMap, setCompletionMap] = useState({});
+      const [programProgress, setProgramProgress] = useState({});
+
       const [workoutLogs, setWorkoutLogs] = useState([]);
       const [bodyweightLogs, setBodyweightLogs] = useState([]);
       const [todayWeight, setTodayWeight] = useState('');
       const [todayInputs, setTodayInputs] = useState({});
       const [expandedExercises, setExpandedExercises] = useState({});
+      const [expandedHistory, setExpandedHistory] = useState({});
+      const [history, setHistory] = useState([]);
       const [showMenu, setShowMenu] = useState(false);
       const [showStretches, setShowStretches] = useState(false);
       const fileInputRef = useRef(null);
 
       useEffect(() => {
-        const saved = localStorage.getItem('workoutData');
+        const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const data = JSON.parse(saved);
-          setCurrentWeek(data.currentWeek || 1);
+          setActiveProgramId(data.activeProgramId || '');
+          setActiveWeek(data.activeWeek || 1);
+          setActiveDay(data.activeDay || 1);
+          setStartDate(data.startDate || '');
+          setLastActivityDate(data.lastActivityDate || '');
+          setCompletionMap(data.completionMap || {});
+          setProgramProgress(data.programProgress || {});
           setWorkoutLogs(data.workoutLogs || []);
           setBodyweightLogs(data.bodyweightLogs || []);
+          setHistory(data.history || []);
+          setViewWeek(data.activeWeek || 1);
+          return;
+        }
+
+        const legacy = localStorage.getItem(LEGACY_KEY);
+        if (!legacy) return;
+
+        try {
+          const legacyData = JSON.parse(legacy);
+          const migratedLogs = (legacyData.workoutLogs || []).map(log => {
+            const dayNum = new Date(log.date).getDay() + 1;
+            return {
+              ...log,
+              programId: 'newwork26',
+              programName: 'New Work 2026',
+              day: dayNum,
+              dayName: dayNumberToName(dayNum)
+            };
+          });
+          setActiveProgramId('newwork26');
+          setActiveWeek(legacyData.currentWeek || 1);
+          setActiveDay(new Date().getDay() + 1);
+          setStartDate(new Date().toISOString().split('T')[0]);
+          setLastActivityDate('');
+          setCompletionMap({});
+          setProgramProgress({});
+          setWorkoutLogs(migratedLogs);
+          setBodyweightLogs(legacyData.bodyweightLogs || []);
+          setHistory([]);
+          setViewWeek(legacyData.currentWeek || 1);
+        } catch (error) {
+          console.error('Failed to migrate legacy data', error);
         }
       }, []);
 
       useEffect(() => {
-        localStorage.setItem('workoutData', JSON.stringify({
-          currentWeek,
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          dataVersion: 2,
+          activeProgramId,
+          activeWeek,
+          activeDay,
+          startDate,
+          lastActivityDate,
+          completionMap,
+          programProgress,
           workoutLogs,
-          bodyweightLogs
+          bodyweightLogs,
+          history
         }));
-      }, [currentWeek, workoutLogs, bodyweightLogs]);
+      }, [
+        activeProgramId,
+        activeWeek,
+        activeDay,
+        startDate,
+        lastActivityDate,
+        completionMap,
+        programProgress,
+        workoutLogs,
+        bodyweightLogs,
+        history
+      ]);
 
-      // Initialize default reps to 10 for all exercises
       useEffect(() => {
-        const dayIndex = new Date().getDay();
-        const exercises = getCurrentSchedule()[DAYS[dayIndex]] || [];
+        const loadPrograms = async () => {
+          try {
+            const response = await fetch('data/programs/index.json');
+            if (!response.ok) throw new Error('Program index not found');
+            const data = await response.json();
+            setPrograms(data.programs || []);
+          } catch (error) {
+            console.error(error);
+            setProgramLoadError('Unable to load program library. Check data/programs/index.json.');
+          }
+        };
+        loadPrograms();
+      }, []);
+
+      useEffect(() => {
+        if (programs.length === 0) return;
+        if (!activeProgramId) {
+          setActiveProgramId(programs[0].id);
+          return;
+        }
+        const exists = programs.some(program => program.id === activeProgramId);
+        if (!exists) {
+          setProgramLoadError(`Active program "${activeProgramId}" not found. Falling back to first program.`);
+          setActiveProgramId(programs[0].id);
+        }
+      }, [programs, activeProgramId]);
+
+      useEffect(() => {
+        if (!activeProgramId || programs.length === 0) return;
+        const selected = programs.find(program => program.id === activeProgramId);
+        if (!selected) return;
+
+        const loadProgram = async () => {
+          try {
+            const response = await fetch(selected.path);
+            if (!response.ok) throw new Error('Program manifest not found');
+            const manifest = await response.json();
+            setProgramManifest(manifest);
+            const basePath = selected.path.split('/').slice(0, -1).join('/');
+            setProgramBasePath(basePath);
+            setProgramWeekCache({});
+            setProgramFileWarnings([]);
+          } catch (error) {
+            console.error(error);
+            setProgramManifest(null);
+            setProgramLoadError(`Unable to load program manifest for ${selected.name}.`);
+          }
+        };
+
+        loadProgram();
+
+        const progress = programProgress[activeProgramId];
+        if (progress) {
+          setActiveWeek(progress.activeWeek || 1);
+          setActiveDay(progress.activeDay || 1);
+          setStartDate(progress.startDate || '');
+          setLastActivityDate(progress.lastActivityDate || '');
+          setCompletionMap(progress.completionMap || {});
+          setViewWeek(progress.activeWeek || 1);
+        } else {
+          const today = new Date().toISOString().split('T')[0];
+          setActiveWeek(1);
+          setActiveDay(1);
+          setStartDate(today);
+          setLastActivityDate('');
+          setCompletionMap({});
+          setViewWeek(1);
+        }
+      }, [activeProgramId, programs]);
+
+      useEffect(() => {
+        if (!activeProgramId) return;
+        setProgramProgress(prev => ({
+          ...prev,
+          [activeProgramId]: {
+            activeWeek,
+            activeDay,
+            startDate,
+            lastActivityDate,
+            completionMap
+          }
+        }));
+      }, [activeProgramId, activeWeek, activeDay, startDate, lastActivityDate, completionMap]);
+
+      useEffect(() => {
+        const exercises = getExercisesForDay(activeWeek, activeDay);
         const defaults = {};
         exercises.forEach(ex => {
           if (!todayInputs[ex]) {
@@ -183,13 +377,31 @@
         if (Object.keys(defaults).length > 0) {
           setTodayInputs(prev => ({ ...prev, ...defaults }));
         }
-      }, [currentWeek]);
+      }, [activeWeek, activeDay, programWeekCache]);
+
+      useEffect(() => {
+        if (!programManifest) return;
+        ensureWeekLoaded(activeWeek);
+      }, [programManifest, activeWeek]);
+
+      useEffect(() => {
+        if (!programManifest) return;
+        ensureWeekLoaded(viewWeek);
+      }, [programManifest, viewWeek]);
 
       const exportData = () => {
         const data = {
-          currentWeek,
+          dataVersion: 2,
+          activeProgramId,
+          activeWeek,
+          activeDay,
+          startDate,
+          lastActivityDate,
+          completionMap,
+          programProgress,
           workoutLogs,
           bodyweightLogs,
+          history,
           exportDate: new Date().toISOString()
         };
         
@@ -203,7 +415,7 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         setShowMenu(false);
-        alert('Data exported successfully! 📁');
+        alert('Data exported successfully.');
       };
 
       const importData = (event) => {
@@ -215,11 +427,43 @@
           try {
             const data = JSON.parse(e.target.result);
             if (confirm('This will replace all current data. Continue?')) {
-              setCurrentWeek(data.currentWeek || 1);
-              setWorkoutLogs(data.workoutLogs || []);
-              setBodyweightLogs(data.bodyweightLogs || []);
+              if (data.activeProgramId || data.dataVersion === 2) {
+                setActiveProgramId(data.activeProgramId || '');
+                setActiveWeek(data.activeWeek || 1);
+                setActiveDay(data.activeDay || 1);
+                setStartDate(data.startDate || '');
+                setLastActivityDate(data.lastActivityDate || '');
+                setCompletionMap(data.completionMap || {});
+                setProgramProgress(data.programProgress || {});
+                setWorkoutLogs(data.workoutLogs || []);
+                setBodyweightLogs(data.bodyweightLogs || []);
+                setHistory(data.history || []);
+                setViewWeek(data.activeWeek || 1);
+              } else {
+                const migratedLogs = (data.workoutLogs || []).map(log => {
+                  const dayNum = new Date(log.date).getDay() + 1;
+                  return {
+                    ...log,
+                    programId: 'newwork26',
+                    programName: 'New Work 2026',
+                    day: dayNum,
+                    dayName: dayNumberToName(dayNum)
+                  };
+                });
+                setActiveProgramId('newwork26');
+                setActiveWeek(data.currentWeek || 1);
+                setActiveDay(new Date().getDay() + 1);
+                setStartDate(new Date().toISOString().split('T')[0]);
+                setLastActivityDate('');
+                setCompletionMap({});
+                setProgramProgress({});
+                setWorkoutLogs(migratedLogs);
+                setBodyweightLogs(data.bodyweightLogs || []);
+                setHistory([]);
+                setViewWeek(data.currentWeek || 1);
+              }
               setShowMenu(false);
-              alert('Data imported successfully! ✅');
+              alert('Data imported successfully.');
             }
           } catch (error) {
             alert('Error importing data. Please check the file format.');
@@ -229,7 +473,47 @@
         event.target.value = '';
       };
 
-      const getCurrentSchedule = () => WEEKLY_SCHEDULES[currentWeek];
+      const ensureWeekLoaded = async (week) => {
+        if (!programManifest || !programBasePath) return;
+        if (programWeekCache[week]) return;
+
+        const schedule = programManifest.schedule?.[String(week)] || {};
+        const warnings = [];
+
+        const dayPromises = DAYS.map(async (dayName) => {
+          const fileName = schedule[dayName];
+          if (!fileName) return { dayName, exercises: [] };
+          const filePath = `${programBasePath}/${fileName}`;
+          try {
+            const response = await fetch(filePath);
+            if (!response.ok) throw new Error('Missing file');
+            const text = await response.text();
+            const rows = parseCsv(text);
+            const exercises = rows.map(row => row.Exercise).filter(Boolean);
+            return { dayName, exercises };
+          } catch (error) {
+            warnings.push(`Missing program file: ${fileName}`);
+            return { dayName, exercises: [] };
+          }
+        });
+
+        const results = await Promise.all(dayPromises);
+        setProgramWeekCache(prev => ({
+          ...prev,
+          [week]: results.reduce((acc, entry) => {
+            acc[entry.dayName] = entry.exercises;
+            return acc;
+          }, {})
+        }));
+        if (warnings.length > 0) {
+          setProgramFileWarnings(prev => [...new Set([...prev, ...warnings])]);
+        }
+      };
+
+      const getExercisesForDay = (week, dayNumber) => {
+        const dayName = dayNumberToName(dayNumber);
+        return programWeekCache?.[week]?.[dayName] || [];
+      };
 
       const isCardioExercise = (exerciseName) => {
         const lower = exerciseName.toLowerCase();
@@ -238,8 +522,8 @@
 
       const logWorkout = () => {
         const today = new Date().toISOString().split('T')[0];
-        const dayIndex = new Date().getDay();
-        const exercises = getCurrentSchedule()[DAYS[dayIndex]] || [];
+        const dayName = dayNumberToName(activeDay);
+        const exercises = getExercisesForDay(activeWeek, activeDay);
         
         const logs = exercises.map(exName => {
           const isCardio = isCardioExercise(exName);
@@ -248,15 +532,36 @@
             weight: parseFloat(todayInputs[exName]?.weight || 0),
             reps: isCardio ? parseFloat(todayInputs[exName]?.reps || 0) : parseInt(todayInputs[exName]?.reps || 0),
             date: today,
-            week: currentWeek,
-            isCardio: isCardio
+            week: activeWeek,
+            day: activeDay,
+            dayName,
+            isCardio: isCardio,
+            programId: activeProgramId,
+            programName: programManifest?.name || activeProgramId
           };
         }).filter(log => log.weight > 0 && log.reps > 0);
+
+        const updatedCompletion = markDayComplete(completionMap, activeWeek, activeDay, today);
+        setCompletionMap(updatedCompletion);
+        setLastActivityDate(today);
 
         if (logs.length > 0) {
           setWorkoutLogs(prev => [...prev, ...logs]);
           setTodayInputs({});
-          alert('Workout logged! 💪');
+          alert('Workout logged.');
+        } else {
+          alert('Day marked complete.');
+        }
+
+        const duration = programManifest?.durationWeeks || 6;
+        const next = getNextIncomplete(updatedCompletion, activeWeek, activeDay + 1, duration)
+          || getNextIncomplete(updatedCompletion, activeWeek + 1, 1, duration);
+        if (next) {
+          setActiveWeek(next.week);
+          setActiveDay(next.day);
+          setViewWeek(next.week);
+        } else if (isProgramComplete(updatedCompletion, duration)) {
+          finalizeProgramCompletion(updatedCompletion, today);
         }
       };
 
@@ -265,23 +570,23 @@
         if (todayWeight && parseFloat(todayWeight) > 0) {
           setBodyweightLogs(prev => [...prev, { weight: parseFloat(todayWeight), date: today }]);
           setTodayWeight('');
-          alert('Bodyweight logged! ⚖️');
+          alert('Bodyweight logged.');
         }
       };
 
       const getLastWorkout = (exerciseName) => {
-        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName);
+        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName && log.programId === activeProgramId);
         return logs.length > 0 ? logs[logs.length - 1] : null;
       };
 
       const getFirstWorkout = (exerciseName) => {
-        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName);
+        const logs = workoutLogs.filter(log => log.exerciseName === exerciseName && log.programId === activeProgramId);
         return logs.length > 0 ? logs[0] : null;
       };
 
       const getAllWorkouts = (exerciseName) => {
         return workoutLogs
-          .filter(log => log.exerciseName === exerciseName)
+          .filter(log => log.exerciseName === exerciseName && log.programId === activeProgramId)
           .sort((a, b) => new Date(b.date) - new Date(a.date));
       };
 
@@ -298,7 +603,7 @@
 
       const getExerciseEmoji = (name) => {
         const lower = name.toLowerCase();
-        if (lower.includes('walk') || lower.includes('bike')) return '🚶';
+        if (lower.includes('walk') || lower.includes('bike')) return '🏃';
         if (lower.includes('bench') || lower.includes('press') && lower.includes('chest')) return '🏋️';
         if (lower.includes('deadlift') || lower.includes('squat')) return '💪';
         if (lower.includes('curl')) return '💪';
@@ -318,13 +623,147 @@
         }));
       };
 
+      const toggleHistoryExpanded = (historyId) => {
+        setExpandedHistory(prev => ({
+          ...prev,
+          [historyId]: !prev[historyId]
+        }));
+      };
+
+      const finalizeProgramCompletion = (updatedCompletion, completionDate) => {
+        const duration = programManifest?.durationWeeks || 6;
+        if (!isProgramComplete(updatedCompletion, duration)) return;
+        const programName = programManifest?.name || activeProgramId;
+        const summaryId = `${activeProgramId}-${startDate || completionDate}`;
+        const alreadyExists = history.some(item => item.id === summaryId);
+        if (alreadyExists) return;
+
+        const filteredLogs = workoutLogs.filter(log => log.programId === activeProgramId)
+          .filter(log => !startDate || log.date >= startDate)
+          .filter(log => log.date <= completionDate);
+        const filteredBodyweight = bodyweightLogs
+          .filter(log => !startDate || log.date >= startDate)
+          .filter(log => log.date <= completionDate);
+
+        const bestByExercise = {};
+        filteredLogs.forEach(log => {
+          const volume = log.weight * log.reps;
+          if (!bestByExercise[log.exerciseName] || bestByExercise[log.exerciseName].volume < volume) {
+            bestByExercise[log.exerciseName] = {
+              exercise: log.exerciseName,
+              bestWeight: log.weight,
+              bestReps: log.reps,
+              volume
+            };
+          }
+        });
+        const topLifts = Object.values(bestByExercise)
+          .sort((a, b) => b.volume - a.volume)
+          .slice(0, 5);
+
+        const totalDays = duration * 7;
+        let completedDays = 0;
+        for (let week = 1; week <= duration; week += 1) {
+          for (let day = 1; day <= 7; day += 1) {
+            if (isDayComplete(updatedCompletion, week, day)) completedDays += 1;
+          }
+        }
+
+        const bodyweightStart = filteredBodyweight[0]?.weight ?? null;
+        const bodyweightEnd = filteredBodyweight[filteredBodyweight.length - 1]?.weight ?? null;
+        let bodyweightTrend = 'No data';
+        if (bodyweightStart !== null && bodyweightEnd !== null) {
+          if (bodyweightEnd > bodyweightStart) bodyweightTrend = 'Up';
+          if (bodyweightEnd < bodyweightStart) bodyweightTrend = 'Down';
+          if (bodyweightEnd === bodyweightStart) bodyweightTrend = 'Flat';
+        }
+
+        const summary = {
+          id: summaryId,
+          programId: activeProgramId,
+          programName,
+          startDate: startDate || completionDate,
+          endDate: completionDate,
+          totalDays,
+          completedDays,
+          completionRate: Math.round((completedDays / totalDays) * 100),
+          totalWorkouts: filteredLogs.length,
+          topLifts,
+          bodyweight: {
+            start: bodyweightStart,
+            end: bodyweightEnd,
+            change: bodyweightStart !== null && bodyweightEnd !== null ? (bodyweightEnd - bodyweightStart).toFixed(1) : null,
+            trend: bodyweightTrend
+          }
+        };
+
+        setHistory(prev => [summary, ...prev]);
+      };
+
+      const resumeProgram = () => {
+        const duration = programManifest?.durationWeeks || 6;
+        const next = getNextIncomplete(completionMap, activeWeek, activeDay, duration)
+          || getNextIncomplete(completionMap, 1, 1, duration);
+        if (next) {
+          setActiveWeek(next.week);
+          setActiveDay(next.day);
+          setViewWeek(next.week);
+        } else {
+          alert('Program complete. Start a new cycle to continue.');
+        }
+      };
+
+      const restartProgram = () => {
+        const today = new Date().toISOString().split('T')[0];
+        setActiveWeek(1);
+        setActiveDay(1);
+        setStartDate(today);
+        setLastActivityDate('');
+        setCompletionMap({});
+        setViewWeek(1);
+      };
+
+      const startOverAtBeginning = () => {
+        setActiveWeek(1);
+        setActiveDay(1);
+        setViewWeek(1);
+      };
+
       const renderToday = () => {
-        const dayIndex = new Date().getDay();
-        const dayName = DAYS[dayIndex];
-        const exercises = getCurrentSchedule()[dayName] || [];
+        const dayName = dayNumberToName(activeDay);
+        const exercises = getExercisesForDay(activeWeek, activeDay);
+        const isComplete = isDayComplete(completionMap, activeWeek, activeDay);
 
         return (
           <div className="space-y-3">
+            <div className="bg-gray-800 p-3 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-400">Active Program</p>
+                  <p className="text-sm text-white font-semibold">{programManifest?.name || 'Loading...'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-400">Progress</p>
+                  <p className="text-sm text-white">Week {activeWeek} Day {activeDay}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={resumeProgram} className="flex-1 px-3 py-2 bg-blue-600 rounded text-white text-xs">
+                  Resume
+                </button>
+                <button onClick={restartProgram} className="flex-1 px-3 py-2 bg-gray-700 rounded text-white text-xs">
+                  Restart Program
+                </button>
+                <button onClick={startOverAtBeginning} className="flex-1 px-3 py-2 bg-gray-700 rounded text-white text-xs">
+                  Start Over at Week 1 Day 1
+                </button>
+              </div>
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Start: {startDate || 'Not set'}</span>
+                <span>Last activity: {lastActivityDate || 'None'}</span>
+              </div>
+            </div>
+
             <div className="bg-gray-800 p-3 rounded-lg">
               <h3 className="text-sm text-gray-400 mb-2">Bodyweight Today</h3>
               <div className="flex gap-2">
@@ -343,23 +782,21 @@
             </div>
 
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-white">{dayName} - Week {currentWeek}</h2>
-              <div className="flex gap-2">
-                {[1, 2, 3, 4].map(week => (
-                  <button
-                    key={week}
-                    onClick={() => setCurrentWeek(week)}
-                    className={`px-2 py-1 rounded text-xs ${currentWeek === week ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
-                  >
-                    W{week}
-                  </button>
-                ))}
-              </div>
+              <h2 className="text-lg font-bold text-white">{dayName} - Week {activeWeek}</h2>
+              {isComplete && (
+                <span className="text-xs text-green-400">Completed</span>
+              )}
             </div>
 
             {exercises.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
+              <div className="text-center py-12 text-gray-400 space-y-3">
                 <p>No workout scheduled for {dayName}</p>
+                <button
+                  onClick={logWorkout}
+                  className="px-4 py-2 bg-green-600 rounded text-white text-sm"
+                >
+                  Mark Day Complete
+                </button>
               </div>
             ) : (
               <>
@@ -455,18 +892,19 @@
       };
 
       const renderSchedule = () => {
-        const schedule = getCurrentSchedule();
+        const schedule = programWeekCache[viewWeek] || {};
+        const duration = programManifest?.durationWeeks || 6;
         
         return (
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-white">Week {currentWeek} Schedule</h2>
+              <h2 className="text-lg font-bold text-white">Week {viewWeek} Schedule</h2>
               <div className="flex gap-2">
-                {[1, 2, 3, 4].map(week => (
+                {Array.from({ length: duration }, (_, i) => i + 1).map(week => (
                   <button
                     key={week}
-                    onClick={() => setCurrentWeek(week)}
-                    className={`px-3 py-1 rounded text-sm ${currentWeek === week ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
+                    onClick={() => setViewWeek(week)}
+                    className={`px-3 py-1 rounded text-sm ${viewWeek === week ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
                   >
                     Week {week}
                   </button>
@@ -495,10 +933,9 @@
       };
 
       const renderStrength = () => {
-        const allExercises = [...new Set(Object.values(WEEKLY_SCHEDULES).flatMap(week => 
-          Object.values(week).flat()
-        ))];
-        const exercisesWithData = allExercises.filter(ex => getFirstWorkout(ex));
+        const exercisesWithData = [...new Set(workoutLogs
+          .filter(log => log.programId === activeProgramId)
+          .map(log => log.exerciseName))];
         
         return (
           <div className="space-y-3">
@@ -550,7 +987,7 @@
                         <p className="text-gray-400 text-xs font-semibold mb-2">Workout History</p>
                         {allLogs.map((log, i) => (
                           <div key={i} className="flex justify-between items-center text-xs">
-                            <span className="text-gray-400">{log.date} (W{log.week})</span>
+                            <span className="text-gray-400">{log.date} (W{log.week} D{log.day})</span>
                             <span className="text-white">{log.weight}{log.isCardio ? '°' : 'lbs'} × {log.reps} {log.isCardio ? 'mi' : 'reps'}</span>
                           </div>
                         ))}
@@ -617,6 +1054,61 @@
         );
       };
 
+      const renderHistory = () => {
+        return (
+          <div className="space-y-3">
+            <h2 className="text-lg font-bold text-white">Program History</h2>
+            {history.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No completed programs yet.</p>
+            ) : (
+              history.map(item => {
+                const isExpanded = expandedHistory[item.id];
+                return (
+                  <div key={item.id} className="bg-gray-800 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => toggleHistoryExpanded(item.id)}
+                      className="w-full p-3 flex items-center justify-between"
+                    >
+                      <div className="text-left">
+                        <p className="text-white font-semibold text-sm">{item.programName}</p>
+                        <p className="text-xs text-gray-400">{item.startDate} to {item.endDate}</p>
+                      </div>
+                      {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+                    {isExpanded && (
+                      <div className="bg-gray-900 p-3 space-y-3 border-t border-gray-700">
+                        <div className="text-xs text-gray-300 space-y-1">
+                          <p>Completed days: {item.completedDays} / {item.totalDays} ({item.completionRate}%)</p>
+                          <p>Total workouts logged: {item.totalWorkouts}</p>
+                        </div>
+                        <div className="text-xs text-gray-300 space-y-1">
+                          <p className="text-gray-400 font-semibold">Top Lifts</p>
+                          {item.topLifts.length === 0 ? (
+                            <p>No lift data.</p>
+                          ) : (
+                            item.topLifts.map((lift, idx) => (
+                              <p key={idx}>{lift.exercise}: {lift.bestWeight} x {lift.bestReps}</p>
+                            ))
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-300 space-y-1">
+                          <p className="text-gray-400 font-semibold">Bodyweight Trend</p>
+                          {item.bodyweight.start === null ? (
+                            <p>No bodyweight logs in range.</p>
+                          ) : (
+                            <p>{item.bodyweight.start} lbs to {item.bodyweight.end} lbs ({item.bodyweight.change} lbs, {item.bodyweight.trend})</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        );
+      };
+
       return (
         <div className="min-h-screen bg-gray-950 text-white pb-20">
           {/* Header with Menu */}
@@ -636,6 +1128,28 @@
           {showMenu && (
             <div className="bg-gray-900 border-b border-gray-800">
               <div className="max-w-md mx-auto p-4 space-y-2">
+                <div className="bg-gray-800 p-3 rounded-lg space-y-2">
+                  <label className="text-xs text-gray-400">Program Library</label>
+                  <select
+                    value={activeProgramId}
+                    onChange={(e) => setActiveProgramId(e.target.value)}
+                    className="w-full bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                  >
+                    {programs.map(program => (
+                      <option key={program.id} value={program.id}>{program.name}</option>
+                    ))}
+                  </select>
+                  {programLoadError && (
+                    <p className="text-xs text-red-400">{programLoadError}</p>
+                  )}
+                  {programFileWarnings.length > 0 && (
+                    <div className="text-xs text-yellow-400 space-y-1">
+                      {programFileWarnings.map((warning, idx) => (
+                        <p key={idx}>{warning}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={exportData}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 rounded-lg text-white hover:bg-gray-700"
@@ -666,6 +1180,7 @@
             {tab === 'schedule' && renderSchedule()}
             {tab === 'strength' && renderStrength()}
             {tab === 'trends' && renderTrends()}
+            {tab === 'history' && renderHistory()}
           </div>
 
           <nav className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800">
@@ -698,6 +1213,13 @@
                 <TrendingUp size={20} />
                 <span className="text-xs">Trends</span>
               </button>
+              <button
+                onClick={() => setTab('history')}
+                className={`flex flex-col items-center gap-1 ${tab === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
+              >
+                <Calendar size={20} />
+                <span className="text-xs">History</span>
+              </button>
             </div>
           </nav>
         </div>
@@ -708,4 +1230,3 @@
   </script>
 </body>
 </html>
-

@@ -1,0 +1,62 @@
+﻿{
+  "id": "newwork26",
+  "name": "New Work 2026",
+  "durationWeeks": 6,
+  "notesFile": "PROGRAM_GUIDE.txt",
+  "schedule": {
+    "1": {
+      "Monday": "monday_workout.csv",
+      "Tuesday": "tuesday_workout.csv",
+      "Wednesday": "wednesday_workout.csv",
+      "Thursday": "thursday_workout.csv",
+      "Friday": "friday_workout.csv",
+      "Saturday": "saturday_workout.csv",
+      "Sunday": "sunday_rest.csv"
+    },
+    "2": {
+      "Monday": "monday_workout.csv",
+      "Tuesday": "tuesday_workout.csv",
+      "Wednesday": "wednesday_workout.csv",
+      "Thursday": "thursday_workout.csv",
+      "Friday": "friday_workout.csv",
+      "Saturday": "saturday_workout.csv",
+      "Sunday": "sunday_rest.csv"
+    },
+    "3": {
+      "Monday": "monday_workout.csv",
+      "Tuesday": "tuesday_workout.csv",
+      "Wednesday": "wednesday_workout.csv",
+      "Thursday": "thursday_workout.csv",
+      "Friday": "friday_workout.csv",
+      "Saturday": "saturday_workout.csv",
+      "Sunday": "sunday_rest.csv"
+    },
+    "4": {
+      "Monday": "monday_workout.csv",
+      "Tuesday": "tuesday_workout.csv",
+      "Wednesday": "wednesday_workout.csv",
+      "Thursday": "thursday_workout.csv",
+      "Friday": "friday_workout.csv",
+      "Saturday": "saturday_workout.csv",
+      "Sunday": "sunday_rest.csv"
+    },
+    "5": {
+      "Monday": "monday_workout.csv",
+      "Tuesday": "tuesday_workout.csv",
+      "Wednesday": "wednesday_workout.csv",
+      "Thursday": "thursday_workout.csv",
+      "Friday": "friday_workout.csv",
+      "Saturday": "saturday_workout.csv",
+      "Sunday": "sunday_rest.csv"
+    },
+    "6": {
+      "Monday": "monday_workout.csv",
+      "Tuesday": "tuesday_workout.csv",
+      "Wednesday": "wednesday_workout.csv",
+      "Thursday": "thursday_workout.csv",
+      "Friday": "friday_workout.csv",
+      "Saturday": "saturday_workout.csv",
+      "Sunday": "sunday_rest.csv"
+    }
+  }
+}
