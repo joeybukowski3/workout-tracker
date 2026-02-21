@@ -1,17 +1,70 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Workout Tracker</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; }
+    * { -webkit-font-smoothing: antialiased; }
+    body { margin: 0; padding: 0; background: #f2f2f7; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; }
+
+    /* Cards */
+    .card { background: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04); }
+    .card.p-4 { padding: 16px; }
+    .card.p-8 { padding: 32px; }
+    .card.overflow-hidden { overflow: hidden; }
+
+    /* Nav / top bar */
+    .nav-bar { background: rgba(255,255,255,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid rgba(0,0,0,0.08); }
+    .top-bar { background: rgba(255,255,255,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid rgba(0,0,0,0.08); }
+
+    /* Phase badge */
+    .phase-badge { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+
+    /* Layout utilities */
+    .flex { display: flex; }
+    .flex-1 { flex: 1 1 0%; }
+    .flex-wrap { flex-wrap: wrap; }
+    .items-center { align-items: center; }
+    .items-start { align-items: flex-start; }
+    .justify-between { justify-content: space-between; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .text-left { text-align: left; }
+
+    /* Gap */
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 12px; }
+
+    /* Margin/padding */
+    .mb-3 { margin-bottom: 12px; }
+    .mt-3 { margin-top: 12px; }
+
+    /* Spacing stacks */
+    .space-y-3 > * + * { margin-top: 12px; }
+    .space-y-4 > * + * { margin-top: 16px; }
+    .space-y-2 > * + * { margin-top: 8px; }
+
+    /* Grid */
+    .grid { display: grid; }
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .gap-3 { gap: 12px; }
+
+    /* Hidden */
+    .hidden { display: none; }
+
+    /* Inputs */
+    input[type=number], select { appearance: none; -webkit-appearance: none; outline: none; }
+    input:focus, select:focus { outline: 2px solid #007AFF; outline-offset: -1px; }
+
+    /* SVG icon color helper */
+    .text-gray-400 { color: #8e8e93; }
   </style>
 </head>
 <body>
@@ -32,7 +85,17 @@
       'Terminal Knee Extensions (TKEs) - Standing'
     ];
 
-    // Lucide React icons as SVG components
+    // Phase color mapping
+    const getPhaseStyle = (phase) => {
+      if (!phase) return { bg: '#e5e5ea', text: '#636366' };
+      const lower = phase.toLowerCase();
+      if (lower.includes('pre') || lower.includes('stretch')) return { bg: '#e8f5e9', text: '#2e7d32' };
+      if (lower.includes('main')) return { bg: '#e3f2fd', text: '#1565c0' };
+      if (lower.includes('bonus')) return { bg: '#fff3e0', text: '#e65100' };
+      return { bg: '#e5e5ea', text: '#636366' };
+    };
+
+    // Icons
     const Calendar = ({ size = 24, className = "" }) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -124,20 +187,9 @@
       let inQuotes = false;
       for (let i = 0; i < line.length; i += 1) {
         const char = line[i];
-        if (char === '"' && line[i + 1] === '"') {
-          current += '"';
-          i += 1;
-          continue;
-        }
-        if (char === '"') {
-          inQuotes = !inQuotes;
-          continue;
-        }
-        if (char === ',' && !inQuotes) {
-          result.push(current);
-          current = '';
-          continue;
-        }
+        if (char === '"' && line[i + 1] === '"') { current += '"'; i += 1; continue; }
+        if (char === '"') { inQuotes = !inQuotes; continue; }
+        if (char === ',' && !inQuotes) { result.push(current); current = ''; continue; }
         current += char;
       }
       result.push(current);
@@ -157,29 +209,26 @@
     };
 
     const diffInDays = (start, end) => {
-      const startAtNoon = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0);
-      const endAtNoon = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 12, 0, 0);
-      const msPerDay = 24 * 60 * 60 * 1000;
-      return Math.floor((endAtNoon - startAtNoon) / msPerDay);
+      const s = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12);
+      const e = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 12);
+      return Math.floor((e - s) / (24 * 60 * 60 * 1000));
     };
 
-    const slugify = (value) => value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+    const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
     const getExerciseEmoji = (name) => {
       const lower = name.toLowerCase();
-      if (lower.includes('walk') || lower.includes('bike')) return '🏃';
-      if (lower.includes('bench') || lower.includes('press') && lower.includes('chest')) return '🏋️';
+      if (lower.includes('walk') || lower.includes('bike') || lower.includes('run')) return '🏃';
+      if (lower.includes('yoga') || lower.includes('stretch') || lower.includes('mobility') || lower.includes('foam') || lower.includes('roll') || lower.includes('bretzel') || lower.includes('pigeon') || lower.includes('lizard') || lower.includes('twist')) return '🧘';
+      if (lower.includes('bench') || lower.includes('press')) return '🏋️';
       if (lower.includes('deadlift') || lower.includes('squat')) return '💪';
       if (lower.includes('curl')) return '💪';
       if (lower.includes('row') || lower.includes('pull')) return '🚣';
       if (lower.includes('leg') || lower.includes('calf')) return '🦵';
       if (lower.includes('shoulder') || lower.includes('delt')) return '💪';
       if (lower.includes('tricep')) return '💪';
-      if (lower.includes('stretch') || lower.includes('mobility')) return '🧘';
-      if (lower.includes('foam') || lower.includes('roll')) return '🧘';
+      if (lower.includes('glute') || lower.includes('bridge') || lower.includes('lateral')) return '🍑';
+      if (lower.includes('core') || lower.includes('bug') || lower.includes('plank')) return '🔥';
       return '💪';
     };
 
@@ -188,9 +237,9 @@
       const [programs, setPrograms] = useState([]);
       const [programManifest, setProgramManifest] = useState(null);
       const [programBasePath, setProgramBasePath] = useState('');
+      // Full row data cache (includes Phase, Sets, Reps, Notes)
       const [programDayCache, setProgramDayCache] = useState({});
       const [programLoadError, setProgramLoadError] = useState('');
-      const [programFileWarnings, setProgramFileWarnings] = useState([]);
 
       const [activeProgramId, setActiveProgramId] = useState('program-1');
       const [programStartDate, setProgramStartDate] = useState('');
@@ -215,22 +264,27 @@
       const todayDayKey = DAY_KEYS[today.getDay()];
       const todayDayName = DAYS[today.getDay()];
 
+      // Load program index and auto-select first program
       useEffect(() => {
         const loadPrograms = async () => {
           try {
             const response = await fetch('data/programs/index.json');
             if (!response.ok) throw new Error('Program index not found');
             const data = await response.json();
-            setPrograms(data.programs || []);
+            const list = data.programs || [];
+            setPrograms(list);
+            // Auto-select first program
+            if (list.length > 0) setActiveProgramId(list[0].id);
           } catch (error) {
             console.error(error);
             setPrograms([{ id: 'program-1', name: 'Program 1', path: 'data/programs/program-1/program.json' }]);
-            setProgramLoadError('Unable to load program library. Using default program.');
+            setProgramLoadError('Unable to load program library.');
           }
         };
         loadPrograms();
       }, []);
 
+      // Load saved state
       useEffect(() => {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
@@ -248,93 +302,35 @@
             return;
           }
         }
-
-        const legacyV2 = localStorage.getItem('workoutTrackerDataV2');
-        if (legacyV2) {
-          try {
-            const data = JSON.parse(legacyV2);
-            setActiveProgramId(data.activeProgramId || 'program-1');
-            setProgramStartDate(data.startDate || todayStr);
-            setCurrentWeek(data.activeWeek || 1);
-            setCompletedDays({});
-            setLastOpenedDate(todayStr);
-            setWorkoutLogs(data.workoutLogs || []);
-            setBodyweightLogs(data.bodyweightLogs || []);
-            setHistory(data.history || []);
-            setViewWeek(data.activeWeek || 1);
-            return;
-          } catch (error) {
-            console.error('Failed to migrate V2 data', error);
-          }
-        }
-
-        const legacy = localStorage.getItem('workoutData');
-        if (legacy) {
-          try {
-            const data = JSON.parse(legacy);
-            setActiveProgramId('program-1');
-            setProgramStartDate(todayStr);
-            setCurrentWeek(data.currentWeek || 1);
-            setCompletedDays({});
-            setLastOpenedDate(todayStr);
-            setWorkoutLogs(data.workoutLogs || []);
-            setBodyweightLogs(data.bodyweightLogs || []);
-            setHistory([]);
-            setViewWeek(data.currentWeek || 1);
-            return;
-          } catch (error) {
-            console.error('Failed to migrate legacy data', error);
-          }
-        }
-
         setProgramStartDate(todayStr);
         setLastOpenedDate(todayStr);
       }, [todayStr]);
 
+      // Save state
       useEffect(() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          version: APP_VERSION,
-          activeProgramId,
-          programStartDate,
-          currentWeek,
-          completedDays,
-          lastOpenedDate,
-          workoutLogs,
-          bodyweightLogs,
-          history
+          version: APP_VERSION, activeProgramId, programStartDate, currentWeek,
+          completedDays, lastOpenedDate, workoutLogs, bodyweightLogs, history
         }));
-      }, [
-        activeProgramId,
-        programStartDate,
-        currentWeek,
-        completedDays,
-        lastOpenedDate,
-        workoutLogs,
-        bodyweightLogs,
-        history
-      ]);
+      }, [activeProgramId, programStartDate, currentWeek, completedDays, lastOpenedDate, workoutLogs, bodyweightLogs, history]);
 
+      // Update week based on start date
       useEffect(() => {
         if (!programStartDate) return;
         setLastOpenedDate(todayStr);
-
         const startDate = parseLocalDate(programStartDate);
         const daysSinceStart = diffInDays(startDate, today);
-        if (daysSinceStart < 0) {
-          setCurrentWeek(1);
-          setViewWeek(1);
-          return;
-        }
-
+        if (daysSinceStart < 0) { setCurrentWeek(1); setViewWeek(1); return; }
         const durationWeeks = programManifest?.durationWeeks || 6;
         const calculatedWeek = Math.min(durationWeeks, Math.floor(daysSinceStart / 7) + 1);
         setCurrentWeek(calculatedWeek);
         setViewWeek(calculatedWeek);
       }, [programStartDate, todayStr, programManifest]);
 
+      // Load program manifest and then ALL days automatically
       useEffect(() => {
         if (!activeProgramId || programs.length === 0) return;
-        const selected = programs.find(program => program.id === activeProgramId) || programs[0];
+        const selected = programs.find(p => p.id === activeProgramId) || programs[0];
         if (!selected) return;
 
         const loadProgram = async () => {
@@ -346,29 +342,44 @@
             const basePath = selected.path.split('/').slice(0, -1).join('/');
             setProgramBasePath(basePath);
             setProgramDayCache({});
-            setProgramFileWarnings([]);
+            // Auto-load all days
+            await loadAllDays(manifest, basePath);
           } catch (error) {
             console.error(error);
             setProgramManifest(null);
-            setProgramLoadError(`Unable to load program manifest for ${selected.name}.`);
+            setProgramLoadError(`Unable to load program: ${selected.name}`);
           }
         };
 
         loadProgram();
       }, [activeProgramId, programs]);
 
-      useEffect(() => {
-        if (!programManifest) return;
-        ensureDayLoaded(todayDayKey);
-      }, [programManifest, todayDayKey]);
+      const loadAllDays = async (manifest, basePath) => {
+        const cache = {};
+        await Promise.all(DAY_KEYS.map(async (dayKey) => {
+          const fileName = manifest.fileMap?.[dayKey];
+          if (!fileName) { cache[dayKey] = []; return; }
+          const filePath = `${basePath}/${fileName}`;
+          try {
+            const response = await fetch(filePath);
+            if (!response.ok) throw new Error('Missing file');
+            const text = await response.text();
+            const rows = parseCsv(text);
+            // Store full row data
+            cache[dayKey] = rows.filter(row => row.Exercise);
+          } catch (error) {
+            cache[dayKey] = [];
+          }
+        }));
+        setProgramDayCache(cache);
+      };
 
+      // Set default inputs for today's exercises
       useEffect(() => {
-        const exercises = programDayCache[todayDayKey] || [];
+        const exercises = (programDayCache[todayDayKey] || []).map(r => r.Exercise);
         const defaults = {};
         exercises.forEach(ex => {
-          if (!todayInputs[ex]) {
-            defaults[ex] = { weight: '', reps: '10' };
-          }
+          if (!todayInputs[ex]) defaults[ex] = { weight: '', reps: '10' };
         });
         if (Object.keys(defaults).length > 0) {
           setTodayInputs(prev => ({ ...prev, ...defaults }));
@@ -377,34 +388,8 @@
 
       const getCompletedForProgram = () => completedDays?.[activeProgramId] || {};
 
-      const ensureDayLoaded = async (dayKey) => {
-        if (!programManifest || !programBasePath) return;
-        if (programDayCache[dayKey]) return;
-
-        const fileName = programManifest.fileMap?.[dayKey];
-        if (!fileName) {
-          setProgramFileWarnings(prev => [...new Set([...prev, `Missing file map for ${dayKey}`])]);
-          setProgramDayCache(prev => ({ ...prev, [dayKey]: [] }));
-          return;
-        }
-
-        const filePath = `${programBasePath}/${fileName}`;
-        try {
-          const response = await fetch(filePath);
-          if (!response.ok) throw new Error('Missing file');
-          const text = await response.text();
-          const rows = parseCsv(text);
-          const exercises = rows.map(row => row.Exercise).filter(Boolean);
-          setProgramDayCache(prev => ({ ...prev, [dayKey]: exercises }));
-        } catch (error) {
-          console.error(error);
-          setProgramFileWarnings(prev => [...new Set([...prev, `Missing program file: ${fileName}`])]);
-          setProgramDayCache(prev => ({ ...prev, [dayKey]: [] }));
-        }
-      };
-
-      const isCardioExercise = (exerciseName) => {
-        const lower = exerciseName.toLowerCase();
+      const isCardioExercise = (name) => {
+        const lower = name.toLowerCase();
         return lower.includes('walk') || lower.includes('bike') || lower.includes('run');
       };
 
@@ -431,7 +416,7 @@
       };
 
       const logWorkout = () => {
-        const exercises = programDayCache[todayDayKey] || [];
+        const exercises = (programDayCache[todayDayKey] || []).map(r => r.Exercise);
         const logs = exercises.map(exName => {
           const isCardio = isCardioExercise(exName);
           return {
@@ -449,20 +434,15 @@
 
         const currentCompleted = getCompletedForProgram();
         const updatedCompleted = { ...currentCompleted, [todayStr]: true };
-        setCompletedDays(prev => ({
-          ...prev,
-          [activeProgramId]: updatedCompleted
-        }));
+        setCompletedDays(prev => ({ ...prev, [activeProgramId]: updatedCompleted }));
 
         if (logs.length > 0) {
           setWorkoutLogs(prev => [...prev, ...logs]);
           setTodayInputs({});
-          alert('Workout logged.');
+          alert('Workout logged!');
         } else {
           alert('Day marked complete.');
         }
-
-        checkProgramCompletion(updatedCompleted);
       };
 
       const logBodyweight = () => {
@@ -473,106 +453,36 @@
         }
       };
 
-      const checkProgramCompletion = (completedOverride) => {
-        if (!programStartDate) return;
-        const durationWeeks = programManifest?.durationWeeks || 6;
-        const totalDays = durationWeeks * 7;
-        const startDate = parseLocalDate(programStartDate);
-        const completed = completedOverride || getCompletedForProgram();
-
-        let completedCount = 0;
-        let allComplete = true;
-        for (let i = 0; i < totalDays; i += 1) {
-          const date = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
-          const dateStr = toLocalDateString(date);
-          if (completed[dateStr]) {
-            completedCount += 1;
-          } else {
-            allComplete = false;
-          }
-        }
-
-        if (!allComplete) return;
-
-        const existing = history.some(item => item.programId === activeProgramId && item.startDate === programStartDate);
-        if (existing) return;
-
-        const endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + totalDays - 1);
-        const summary = {
-          id: `${activeProgramId}-${programStartDate}`,
-          programId: activeProgramId,
-          programName: programManifest?.name || activeProgramId,
-          startDate: programStartDate,
-          endDate: toLocalDateString(endDate),
-          completedDays: completedCount,
-          totalDays,
-          completionRate: Math.round((completedCount / totalDays) * 100)
-        };
-
-        setHistory(prev => [summary, ...prev]);
-      };
-
       const getMissedDays = () => {
         if (!programStartDate) return [];
         const startDate = parseLocalDate(programStartDate);
         const daysSinceStart = diffInDays(startDate, today);
         if (daysSinceStart <= 0) return [];
-
         const completed = getCompletedForProgram();
         const missed = [];
-        for (let i = 0; i < daysSinceStart; i += 1) {
+        for (let i = 0; i < daysSinceStart; i++) {
           const date = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
           const dateStr = toLocalDateString(date);
-          if (!completed[dateStr]) {
-            missed.push(dateStr);
-          }
+          if (!completed[dateStr]) missed.push(dateStr);
         }
         return missed;
       };
 
-      const resumeProgram = () => {
-        ensureDayLoaded(todayDayKey);
-        setTab('today');
-      };
-
-      const restartProgram = () => {
-        setProgramStartDate(todayStr);
-        setCurrentWeek(1);
-        setViewWeek(1);
-        setCompletedDays(prev => ({ ...prev, [activeProgramId]: {} }));
-      };
-
       const exportData = () => {
-        const data = {
-          version: APP_VERSION,
-          activeProgramId,
-          programStartDate,
-          currentWeek,
-          completedDays,
-          lastOpenedDate,
-          workoutLogs,
-          bodyweightLogs,
-          history,
-          exportDate: new Date().toISOString()
-        };
-
+        const data = { version: APP_VERSION, activeProgramId, programStartDate, currentWeek, completedDays, lastOpenedDate, workoutLogs, bodyweightLogs, history, exportDate: new Date().toISOString() };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `workout-tracker-backup-${todayStr}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        a.href = url; a.download = `workout-tracker-backup-${todayStr}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
         setShowMenu(false);
-        alert('Data exported successfully.');
+        alert('Data exported.');
       };
 
       const importData = (event) => {
         const file = event.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = (e) => {
           try {
@@ -588,16 +498,15 @@
               setHistory(data.history || []);
               setViewWeek(data.currentWeek || 1);
               setShowMenu(false);
-              alert('Data imported successfully.');
+              alert('Data imported.');
             }
-          } catch (error) {
-            alert('Error importing data. Please check the file format.');
-          }
+          } catch { alert('Error importing data.'); }
         };
         reader.readAsText(file);
         event.target.value = '';
       };
 
+      // ─── RENDER TODAY ──────────────────────────────────────────────
       const renderToday = () => {
         const exercises = programDayCache[todayDayKey] || [];
         const completed = getCompletedForProgram()[todayStr];
@@ -605,150 +514,157 @@
 
         return (
           <div className="space-y-3">
-            <div className="bg-gray-800 p-3 rounded-lg space-y-2">
-              <div className="flex items-center justify-between">
+            {/* Program status card */}
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-xs text-gray-400">Active Program</p>
-                  <p className="text-sm text-white font-semibold">{programManifest?.name || 'Loading...'}</p>
+                  <p style={{color:'#8e8e93', fontSize:11, fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase'}}>Active Program</p>
+                  <p style={{color:'#1c1c1e', fontSize:16, fontWeight:600, marginTop:2}}>{programManifest?.name || 'Loading...'}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-400">Progress</p>
-                  <p className="text-sm text-white">Week {currentWeek} · {todayDayName}</p>
+                  <p style={{color:'#8e8e93', fontSize:11, fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase'}}>Progress</p>
+                  <p style={{color:'#1c1c1e', fontSize:14, fontWeight:500, marginTop:2}}>Week {currentWeek} · {todayDayName}</p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button onClick={resumeProgram} className="flex-1 px-3 py-2 bg-blue-600 rounded text-white text-xs">
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => setTab('today')}
+                  style={{flex:1, padding:'8px 0', background:'#007AFF', borderRadius:10, color:'white', fontSize:13, fontWeight:600, border:'none'}}
+                >
                   Resume
                 </button>
-                <button onClick={restartProgram} className="flex-1 px-3 py-2 bg-gray-700 rounded text-white text-xs">
+                <button
+                  onClick={() => { setProgramStartDate(todayStr); setCurrentWeek(1); setViewWeek(1); setCompletedDays(prev => ({ ...prev, [activeProgramId]: {} })); }}
+                  style={{flex:1, padding:'8px 0', background:'#f2f2f7', borderRadius:10, color:'#1c1c1e', fontSize:13, fontWeight:600, border:'none'}}
+                >
                   Restart
                 </button>
               </div>
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>Start: {programStartDate || 'Not set'}</span>
-                <span>Last opened: {lastOpenedDate || 'None'}</span>
+              <div className="flex justify-between" style={{fontSize:12, color:'#8e8e93'}}>
+                <span>Started {programStartDate || 'Not set'}</span>
+                {missedDays.length > 0 && <span style={{color:'#ff9500'}}>⚠ {missedDays.length} missed</span>}
               </div>
-              {missedDays.length > 0 && (
-                <p className="text-xs text-yellow-400">Missed days: {missedDays.length}</p>
-              )}
             </div>
 
-            <div className="bg-gray-800 p-3 rounded-lg">
-              <h3 className="text-sm text-gray-400 mb-2">Bodyweight Today</h3>
+            {/* Bodyweight */}
+            <div className="card p-4">
+              <p style={{color:'#8e8e93', fontSize:11, fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:8}}>Bodyweight Today</p>
               <div className="flex gap-2">
                 <input
-                  type="number"
-                  step="0.1"
-                  value={todayWeight}
+                  type="number" step="0.1" value={todayWeight}
                   onChange={(e) => setTodayWeight(e.target.value)}
-                  placeholder="Enter weight (lbs)"
-                  className="flex-1 bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                  placeholder="Weight (lbs)"
+                  style={{flex:1, background:'#f2f2f7', border:'none', borderRadius:10, padding:'10px 12px', fontSize:15, color:'#1c1c1e'}}
                 />
-                <button onClick={logBodyweight} className="px-4 py-2 bg-green-600 rounded text-white text-sm">
+                <button
+                  onClick={logBodyweight}
+                  style={{padding:'10px 18px', background:'#34c759', borderRadius:10, color:'white', fontSize:14, fontWeight:600, border:'none'}}
+                >
                   Log
                 </button>
               </div>
             </div>
 
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-white">{todayDayName} - Week {currentWeek}</h2>
-              {completed && (
-                <span className="text-xs text-green-400">Completed</span>
-              )}
+            {/* Day header */}
+            <div className="flex items-center justify-between" style={{paddingTop:4}}>
+              <h2 style={{color:'#1c1c1e', fontSize:20, fontWeight:700}}>{todayDayName} — Week {currentWeek}</h2>
+              {completed && <span style={{color:'#34c759', fontSize:13, fontWeight:600}}>✓ Completed</span>}
             </div>
 
             {exercises.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 space-y-3">
-                <p>No workout scheduled for {todayDayName}</p>
+              <div className="card p-8 text-center">
+                <p style={{color:'#8e8e93', marginBottom:16}}>No workout scheduled for {todayDayName}</p>
                 <button
                   onClick={logWorkout}
-                  className="px-4 py-2 bg-green-600 rounded text-white text-sm"
+                  style={{padding:'10px 24px', background:'#34c759', borderRadius:10, color:'white', fontSize:14, fontWeight:600, border:'none'}}
                 >
                   Mark Day Complete
                 </button>
               </div>
             ) : (
               <>
-                {exercises.map((exName, idx) => {
+                {exercises.map((row, idx) => {
+                  const exName = row.Exercise;
                   const exerciseId = slugify(exName);
                   const last = getLastWorkout(exerciseId);
                   const isCardio = isCardioExercise(exName);
+                  const phase = row.Phase || '';
+                  const phaseStyle = getPhaseStyle(phase);
 
                   return (
-                    <div key={idx} className="bg-gray-800 p-3 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">{getExerciseEmoji(exName)}</span>
+                    <div key={idx} className="card p-4">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span style={{fontSize:22}}>{getExerciseEmoji(exName)}</span>
                         <div className="flex-1">
-                          <h3 className="text-white font-medium text-sm">{exName}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 style={{color:'#1c1c1e', fontWeight:600, fontSize:15}}>{exName}</h3>
+                          </div>
+                          {row.Sets && row.Reps && (
+                            <p style={{color:'#8e8e93', fontSize:12, marginTop:2}}>{row.Sets} sets × {row.Reps}</p>
+                          )}
                           {last && (
-                            <p className="text-xs text-gray-400">
-                              Last: {last.weight}{isCardio ? '°' : 'lbs'} × {last.reps} {isCardio ? 'mi' : 'reps'}
+                            <p style={{color:'#007AFF', fontSize:12, marginTop:2}}>
+                              Last: {last.weight}{isCardio ? '°' : ' lbs'} × {last.reps} {isCardio ? 'mi' : 'reps'}
                             </p>
                           )}
                         </div>
+                        {phase && (
+                          <span className="phase-badge" style={{background:phaseStyle.bg, color:phaseStyle.text, whiteSpace:'nowrap'}}>
+                            {phase.replace(' (Optional)', '').replace('Pre-Workout ', '')}
+                          </span>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <input
                           type="number"
-                          placeholder={isCardio ? "Incline" : "Weight"}
+                          placeholder={isCardio ? "Incline" : "Weight (lbs)"}
                           value={todayInputs[exName]?.weight || ''}
-                          onChange={(e) => setTodayInputs(prev => ({
-                            ...prev,
-                            [exName]: { ...prev[exName], weight: e.target.value }
-                          }))}
-                          className="flex-1 bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                          onChange={(e) => setTodayInputs(prev => ({ ...prev, [exName]: { ...prev[exName], weight: e.target.value } }))}
+                          style={{flex:1, background:'#f2f2f7', border:'none', borderRadius:10, padding:'10px 12px', fontSize:15, color:'#1c1c1e'}}
                         />
                         {isCardio ? (
                           <input
-                            type="number"
-                            step="0.1"
-                            placeholder="Distance"
+                            type="number" step="0.1" placeholder="Distance"
                             value={todayInputs[exName]?.reps || ''}
-                            onChange={(e) => setTodayInputs(prev => ({
-                              ...prev,
-                              [exName]: { ...prev[exName], reps: e.target.value }
-                            }))}
-                            className="flex-1 bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                            onChange={(e) => setTodayInputs(prev => ({ ...prev, [exName]: { ...prev[exName], reps: e.target.value } }))}
+                            style={{flex:1, background:'#f2f2f7', border:'none', borderRadius:10, padding:'10px 12px', fontSize:15, color:'#1c1c1e'}}
                           />
                         ) : (
                           <select
                             value={todayInputs[exName]?.reps || '10'}
-                            onChange={(e) => setTodayInputs(prev => ({
-                              ...prev,
-                              [exName]: { ...prev[exName], reps: e.target.value }
-                            }))}
-                            className="flex-1 bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                            onChange={(e) => setTodayInputs(prev => ({ ...prev, [exName]: { ...prev[exName], reps: e.target.value } }))}
+                            style={{flex:1, background:'#f2f2f7', border:'none', borderRadius:10, padding:'10px 12px', fontSize:15, color:'#1c1c1e'}}
                           >
-                            {[...Array(40)].map((_, i) => (
-                              <option key={i + 1} value={i + 1}>{i + 1}</option>
-                            ))}
+                            {[...Array(40)].map((_, i) => <option key={i+1} value={i+1}>{i+1} reps</option>)}
                           </select>
                         )}
                       </div>
                     </div>
                   );
                 })}
+
                 <button
                   onClick={logWorkout}
-                  className="w-full py-3 bg-green-600 rounded-lg text-white font-semibold"
+                  style={{width:'100%', padding:'14px 0', background:'#007AFF', borderRadius:12, color:'white', fontSize:16, fontWeight:700, border:'none', marginTop:4}}
                 >
                   Complete Workout
                 </button>
 
-                <div className="bg-gray-800 rounded-lg overflow-hidden">
+                {/* Daily Stretches */}
+                <div className="card overflow-hidden">
                   <button
                     onClick={() => setShowStretches(!showStretches)}
-                    className="w-full p-3 flex justify-between items-center"
+                    style={{width:'100%', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', background:'none', border:'none'}}
                   >
-                    <h3 className="text-white font-semibold text-sm">Daily Stretches</h3>
+                    <span style={{color:'#1c1c1e', fontWeight:600, fontSize:15}}>🧘 Daily Stretches</span>
                     {showStretches ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                   </button>
                   {showStretches && (
-                    <div className="px-3 pb-3 space-y-2">
+                    <div style={{padding:'0 16px 16px', borderTop:'1px solid #f2f2f7'}}>
                       {DAILY_STRETCHES.map((stretch, idx) => (
-                        <div key={idx} className="flex items-start gap-2">
-                          <span className="text-gray-400 text-xs mt-0.5">{idx + 1}.</span>
-                          <span className="text-gray-300 text-xs">{stretch}</span>
+                        <div key={idx} style={{display:'flex', gap:10, marginTop:10}}>
+                          <span style={{color:'#8e8e93', fontSize:13, minWidth:16}}>{idx+1}.</span>
+                          <span style={{color:'#3c3c43', fontSize:13}}>{stretch}</span>
                         </div>
                       ))}
                     </div>
@@ -760,64 +676,103 @@
         );
       };
 
+      // ─── RENDER SCHEDULE ───────────────────────────────────────────
       const renderSchedule = () => {
         const duration = programManifest?.durationWeeks || 6;
 
         return (
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-white">Week {viewWeek} Schedule</h2>
-              <div className="flex gap-2">
-                {Array.from({ length: duration }, (_, i) => i + 1).map(week => (
-                  <button
-                    key={week}
-                    onClick={() => setViewWeek(week)}
-                    className={`px-3 py-1 rounded text-sm ${viewWeek === week ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
-                  >
-                    Week {week}
-                  </button>
-                ))}
+          <div className="space-y-4">
+            {/* Program header */}
+            <div className="card p-4">
+              <p style={{color:'#8e8e93', fontSize:11, fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:4}}>Current Program</p>
+              <p style={{color:'#1c1c1e', fontSize:20, fontWeight:700}}>{programManifest?.name || 'Loading...'}</p>
+              <p style={{color:'#8e8e93', fontSize:13, marginTop:2}}>{duration}-week program · {programManifest?.scheduleType === 'dayOfWeek' ? 'Day-based schedule' : ''}</p>
+              <div className="flex items-center gap-2 mt-3" style={{flexWrap:'wrap'}}>
+                <span style={{fontSize:12, color:'#8e8e93'}}>You are on:</span>
+                <span style={{background:'#007AFF', color:'white', borderRadius:20, padding:'2px 10px', fontSize:12, fontWeight:600}}>Week {currentWeek}</span>
               </div>
             </div>
 
-            {DAY_KEYS.map((dayKey, idx) => (
-              <div key={dayKey} className="bg-gray-800 p-3 rounded-lg">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-white font-semibold text-sm">{DAYS[idx]}</h3>
-                  <button
-                    onClick={() => ensureDayLoaded(dayKey)}
-                    className="text-xs text-gray-400"
-                  >
-                    Load
-                  </button>
-                </div>
-                {(programDayCache[dayKey] || []).length === 0 ? (
-                  <p className="text-gray-400 text-sm">Rest Day / Not loaded</p>
-                ) : (
-                  <div className="space-y-1">
-                    {(programDayCache[dayKey] || []).map((exName, exIdx) => (
-                      <div key={exIdx} className="text-gray-300 text-xs">
-                        {getExerciseEmoji(exName)} {exName}
-                      </div>
-                    ))}
+            {/* Day listings */}
+            {DAY_KEYS.map((dayKey, idx) => {
+              const rows = programDayCache[dayKey] || [];
+              const isToday = dayKey === todayDayKey;
+              const dayName = DAYS[idx];
+
+              // Group by phase
+              const byPhase = {};
+              rows.forEach(row => {
+                const phase = row.Phase || 'Exercises';
+                if (!byPhase[phase]) byPhase[phase] = [];
+                byPhase[phase].push(row);
+              });
+
+              return (
+                <div key={dayKey} className="card overflow-hidden" style={{border: isToday ? '2px solid #007AFF' : 'none'}}>
+                  {/* Day header */}
+                  <div style={{padding:'12px 16px', borderBottom: rows.length > 0 ? '1px solid #f2f2f7' : 'none', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <h3 style={{color:'#1c1c1e', fontWeight:700, fontSize:16}}>{dayName}</h3>
+                      {isToday && <span style={{background:'#007AFF', color:'white', borderRadius:20, padding:'1px 8px', fontSize:11, fontWeight:700}}>TODAY</span>}
+                    </div>
+                    <span style={{color:'#8e8e93', fontSize:12}}>{rows.length > 0 ? `${rows.length} exercises` : 'Rest day'}</span>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {rows.length === 0 ? (
+                    <div style={{padding:'12px 16px'}}>
+                      <p style={{color:'#8e8e93', fontSize:14}}>😴 Rest & Recovery</p>
+                    </div>
+                  ) : (
+                    <div style={{padding:'8px 16px 16px'}}>
+                      {Object.entries(byPhase).map(([phase, phaseRows]) => {
+                        const phaseStyle = getPhaseStyle(phase);
+                        return (
+                          <div key={phase} style={{marginTop:12}}>
+                            <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
+                              <span className="phase-badge" style={{background:phaseStyle.bg, color:phaseStyle.text}}>{phase}</span>
+                            </div>
+                            <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                              {phaseRows.map((row, i) => (
+                                <div key={i} style={{display:'flex', alignItems:'flex-start', gap:10, padding:'8px 10px', background:'#f9f9f9', borderRadius:8}}>
+                                  <span style={{fontSize:16, flexShrink:0}}>{getExerciseEmoji(row.Exercise)}</span>
+                                  <div style={{flex:1, minWidth:0}}>
+                                    <p style={{color:'#1c1c1e', fontSize:13, fontWeight:500, marginBottom:2}}>{row.Exercise}</p>
+                                    {(row.Sets || row.Reps) && (
+                                      <p style={{color:'#8e8e93', fontSize:12}}>
+                                        {row.Sets && `${row.Sets} sets`}{row.Sets && row.Reps && ' × '}{row.Reps && row.Reps}
+                                        {row.Rest_Seconds && row.Rest_Seconds !== '0' && ` · ${row.Rest_Seconds}s rest`}
+                                      </p>
+                                    )}
+                                    {row.Notes_Substitutes && (
+                                      <p style={{color:'#8e8e93', fontSize:11, marginTop:2, fontStyle:'italic'}}>{row.Notes_Substitutes}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       };
 
+      // ─── RENDER STRENGTH ───────────────────────────────────────────
       const renderStrength = () => {
-        const exercisesWithData = [...new Set(workoutLogs
-          .filter(log => log.programId === activeProgramId)
-          .map(log => log.exerciseId))];
+        const exercisesWithData = [...new Set(workoutLogs.filter(log => log.programId === activeProgramId).map(log => log.exerciseId))];
 
         return (
           <div className="space-y-3">
-            <h2 className="text-lg font-bold text-white">Strength Progress</h2>
+            <h2 style={{color:'#1c1c1e', fontSize:22, fontWeight:700}}>Strength Progress</h2>
             {exercisesWithData.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">No workout data yet. Start logging!</p>
+              <div className="card p-8 text-center">
+                <p style={{color:'#8e8e93'}}>No workout data yet. Start logging!</p>
+              </div>
             ) : (
               exercisesWithData.map((exerciseId, idx) => {
                 const allLogs = getAllWorkouts(exerciseId);
@@ -825,46 +780,42 @@
                 const progress = calculateGain(exerciseId);
                 const isExpanded = expandedExercises[exerciseId];
                 if (!last || !progress) return null;
-
                 const { first, gain } = progress;
                 const isCardio = last.isCardio;
 
                 return (
-                  <div key={idx} className="bg-gray-800 rounded-lg overflow-hidden">
-                    <div className="p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">{getExerciseEmoji(last.exerciseName)}</span>
-                        <h3 className="text-white font-medium text-sm flex-1">{last.exerciseName}</h3>
-                        <button
-                          onClick={() => setExpandedExercises(prev => ({ ...prev, [exerciseId]: !prev[exerciseId] }))}
-                          className="text-gray-400"
-                        >
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  <div key={idx} className="card overflow-hidden">
+                    <div style={{padding:16}}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span style={{fontSize:22}}>{getExerciseEmoji(last.exerciseName)}</span>
+                        <h3 style={{color:'#1c1c1e', fontWeight:600, fontSize:15, flex:1}}>{last.exerciseName}</h3>
+                        <button onClick={() => setExpandedExercises(prev => ({ ...prev, [exerciseId]: !prev[exerciseId] }))} style={{background:'none',border:'none',padding:4}}>
+                          {isExpanded ? <ChevronUp size={16} color="#8e8e93" /> : <ChevronDown size={16} color="#8e8e93" />}
                         </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <p className="text-gray-400 mb-1">Baseline</p>
-                          <p className="text-white">{first.weight}{isCardio ? '°' : 'lbs'} × {first.reps} {isCardio ? 'mi' : 'reps'}</p>
+                      <div className="grid grid-cols-2 gap-3" style={{marginBottom:12}}>
+                        <div style={{background:'#f2f2f7', borderRadius:10, padding:'10px 12px'}}>
+                          <p style={{color:'#8e8e93', fontSize:11, fontWeight:600, marginBottom:4}}>BASELINE</p>
+                          <p style={{color:'#1c1c1e', fontSize:14, fontWeight:500}}>{first.weight}{isCardio ? '°' : 'lbs'} × {first.reps}</p>
                         </div>
-                        <div>
-                          <p className="text-gray-400 mb-1">Current</p>
-                          <p className="text-white">{last.weight}{isCardio ? '°' : 'lbs'} × {last.reps} {isCardio ? 'mi' : 'reps'}</p>
+                        <div style={{background:'#f2f2f7', borderRadius:10, padding:'10px 12px'}}>
+                          <p style={{color:'#8e8e93', fontSize:11, fontWeight:600, marginBottom:4}}>CURRENT</p>
+                          <p style={{color:'#1c1c1e', fontSize:14, fontWeight:500}}>{last.weight}{isCardio ? '°' : 'lbs'} × {last.reps}</p>
                         </div>
                       </div>
-                      <div className={`mt-2 flex items-center gap-2 ${gain > 0 ? 'text-green-400' : gain < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                      <div style={{display:'flex', alignItems:'center', gap:6, color: gain > 0 ? '#34c759' : gain < 0 ? '#ff3b30' : '#8e8e93'}}>
                         {gain > 0 && <ArrowUp size={14} />}
-                        <span className="font-semibold text-sm">{gain > 0 ? '+' : ''}{gain}%</span>
+                        <span style={{fontWeight:700, fontSize:16}}>{gain > 0 ? '+' : ''}{gain}%</span>
+                        <span style={{fontSize:13, color:'#8e8e93'}}>volume change</span>
                       </div>
                     </div>
-
                     {isExpanded && (
-                      <div className="bg-gray-900 p-3 space-y-2 border-t border-gray-700">
-                        <p className="text-gray-400 text-xs font-semibold mb-2">Workout History</p>
+                      <div style={{borderTop:'1px solid #f2f2f7', padding:16, background:'#fafafa'}}>
+                        <p style={{color:'#8e8e93', fontSize:11, fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:10}}>History</p>
                         {allLogs.map((log, i) => (
-                          <div key={i} className="flex justify-between items-center text-xs">
-                            <span className="text-gray-400">{log.date} (W{log.week})</span>
-                            <span className="text-white">{log.weight}{log.isCardio ? '°' : 'lbs'} × {log.reps} {log.isCardio ? 'mi' : 'reps'}</span>
+                          <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom: i < allLogs.length-1 ? '1px solid #f2f2f7' : 'none'}}>
+                            <span style={{color:'#8e8e93', fontSize:13}}>{log.date} · W{log.week}</span>
+                            <span style={{color:'#1c1c1e', fontSize:13, fontWeight:500}}>{log.weight}{log.isCardio ? '°' : 'lbs'} × {log.reps}</span>
                           </div>
                         ))}
                       </div>
@@ -877,19 +828,22 @@
         );
       };
 
+      // ─── RENDER TRENDS ─────────────────────────────────────────────
       const renderTrends = () => {
         const sortedLogs = [...bodyweightLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
 
         return (
           <div className="space-y-3">
-            <h2 className="text-lg font-bold text-white">Bodyweight Trends</h2>
+            <h2 style={{color:'#1c1c1e', fontSize:22, fontWeight:700}}>Bodyweight Trends</h2>
             {sortedLogs.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">No bodyweight data yet</p>
+              <div className="card p-8 text-center">
+                <p style={{color:'#8e8e93'}}>No bodyweight data yet</p>
+              </div>
             ) : (
               <>
-                <div className="bg-gray-800 p-4 rounded-lg">
-                  <div className="h-48 relative">
-                    <svg viewBox="0 0 300 150" className="w-full h-full">
+                <div className="card p-4">
+                  <div style={{height:160, position:'relative'}}>
+                    <svg viewBox="0 0 300 150" style={{width:'100%', height:'100%'}}>
                       {sortedLogs.map((log, i) => {
                         if (i === 0) return null;
                         const prevLog = sortedLogs[i - 1];
@@ -900,27 +854,24 @@
                         const range = maxW - minW || 1;
                         const y1 = 150 - ((prevLog.weight - minW) / range * 130 + 10);
                         const y2 = 150 - ((log.weight - minW) / range * 130 + 10);
-
-                        return (
-                          <line
-                            key={i}
-                            x1={x1}
-                            y1={y1}
-                            x2={x2}
-                            y2={y2}
-                            stroke="#3b82f6"
-                            strokeWidth="2"
-                          />
-                        );
+                        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" />;
+                      })}
+                      {sortedLogs.map((log, i) => {
+                        const x = sortedLogs.length > 1 ? i * (300 / (sortedLogs.length - 1)) : 150;
+                        const minW = Math.min(...sortedLogs.map(l => l.weight));
+                        const maxW = Math.max(...sortedLogs.map(l => l.weight));
+                        const range = maxW - minW || 1;
+                        const y = 150 - ((log.weight - minW) / range * 130 + 10);
+                        return <circle key={i} cx={x} cy={y} r="4" fill="#007AFF" />;
                       })}
                     </svg>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {sortedLogs.reverse().map((log, i) => (
-                    <div key={i} className="bg-gray-800 p-3 rounded flex justify-between text-sm">
-                      <span className="text-gray-400">{log.date}</span>
-                      <span className="text-white font-semibold">{log.weight} lbs</span>
+                  {[...sortedLogs].reverse().map((log, i) => (
+                    <div key={i} className="card" style={{padding:'12px 16px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                      <span style={{color:'#8e8e93', fontSize:14}}>{log.date}</span>
+                      <span style={{color:'#1c1c1e', fontSize:16, fontWeight:600}}>{log.weight} lbs</span>
                     </div>
                   ))}
                 </div>
@@ -930,30 +881,32 @@
         );
       };
 
+      // ─── RENDER HISTORY ────────────────────────────────────────────
       const renderHistory = () => (
         <div className="space-y-3">
-          <h2 className="text-lg font-bold text-white">Program History</h2>
+          <h2 style={{color:'#1c1c1e', fontSize:22, fontWeight:700}}>Program History</h2>
           {history.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">No completed programs yet.</p>
+            <div className="card p-8 text-center">
+              <p style={{color:'#8e8e93'}}>No completed programs yet.</p>
+            </div>
           ) : (
             history.map(item => {
               const isExpanded = expandedHistory[item.id];
               return (
-                <div key={item.id} className="bg-gray-800 rounded-lg overflow-hidden">
+                <div key={item.id} className="card overflow-hidden">
                   <button
                     onClick={() => setExpandedHistory(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                    className="w-full p-3 flex items-center justify-between"
+                    style={{width:'100%', padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', background:'none', border:'none'}}
                   >
                     <div className="text-left">
-                      <p className="text-white font-semibold text-sm">{item.programName}</p>
-                      <p className="text-xs text-gray-400">{item.startDate} to {item.endDate}</p>
+                      <p style={{color:'#1c1c1e', fontWeight:600, fontSize:15}}>{item.programName}</p>
+                      <p style={{color:'#8e8e93', fontSize:12, marginTop:2}}>{item.startDate} → {item.endDate}</p>
                     </div>
-                    {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    {isExpanded ? <ChevronUp size={16} color="#8e8e93" /> : <ChevronDown size={16} color="#8e8e93" />}
                   </button>
                   {isExpanded && (
-                    <div className="bg-gray-900 p-3 space-y-2 border-t border-gray-700 text-xs text-gray-300">
-                      <p>Completed days: {item.completedDays} / {item.totalDays} ({item.completionRate}%)</p>
-                      <p>Program ID: {item.programId}</p>
+                    <div style={{borderTop:'1px solid #f2f2f7', padding:'12px 16px', background:'#fafafa'}}>
+                      <p style={{color:'#3c3c43', fontSize:13}}>Completed: {item.completedDays}/{item.totalDays} days ({item.completionRate}%)</p>
                     </div>
                   )}
                 </div>
@@ -964,70 +917,48 @@
       );
 
       return (
-        <div className="min-h-screen bg-gray-950 text-white pb-20">
-          <div className="bg-gray-900 border-b border-gray-800 p-4">
-            <div className="max-w-md mx-auto flex justify-between items-center">
-              <h1 className="text-xl font-bold">Workout Tracker</h1>
+        <div style={{minHeight:'100vh', background:'#f2f2f7', paddingBottom:80}}>
+          {/* Top bar */}
+          <div className="top-bar" style={{position:'sticky', top:0, zIndex:50}}>
+            <div style={{maxWidth:480, margin:'0 auto', padding:'12px 16px', display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <h1 style={{fontSize:20, fontWeight:700, color:'#1c1c1e'}}>Workout Tracker</h1>
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className="p-2 hover:bg-gray-800 rounded"
+                style={{padding:8, borderRadius:8, background: showMenu ? '#e5e5ea' : 'none', border:'none'}}
               >
-                <Menu size={24} />
+                <Menu size={22} color="#1c1c1e" />
               </button>
             </div>
           </div>
 
+          {/* Menu */}
           {showMenu && (
-            <div className="bg-gray-900 border-b border-gray-800">
-              <div className="max-w-md mx-auto p-4 space-y-2">
-                <div className="bg-gray-800 p-3 rounded-lg space-y-2">
-                  <label className="text-xs text-gray-400">Program Library</label>
+            <div style={{background:'white', borderBottom:'1px solid #e5e5ea'}}>
+              <div style={{maxWidth:480, margin:'0 auto', padding:16, display:'flex', flexDirection:'column', gap:8}}>
+                <div style={{background:'#f2f2f7', borderRadius:12, padding:12}}>
+                  <p style={{color:'#8e8e93', fontSize:11, fontWeight:600, letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:8}}>Program</p>
                   <select
                     value={activeProgramId}
                     onChange={(e) => setActiveProgramId(e.target.value)}
-                    className="w-full bg-gray-900 px-3 py-2 rounded text-white text-sm"
+                    style={{width:'100%', background:'white', border:'none', borderRadius:8, padding:'10px 12px', fontSize:14, color:'#1c1c1e'}}
                   >
-                    {programs.map(program => (
-                      <option key={program.id} value={program.id}>{program.name}</option>
-                    ))}
+                    {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
-                  {programLoadError && (
-                    <p className="text-xs text-red-400">{programLoadError}</p>
-                  )}
-                  {programFileWarnings.length > 0 && (
-                    <div className="text-xs text-yellow-400 space-y-1">
-                      {programFileWarnings.map((warning, idx) => (
-                        <p key={idx}>{warning}</p>
-                      ))}
-                    </div>
-                  )}
+                  {programLoadError && <p style={{color:'#ff3b30', fontSize:12, marginTop:6}}>{programLoadError}</p>}
                 </div>
-                <button
-                  onClick={exportData}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 rounded-lg text-white hover:bg-gray-700"
-                >
-                  <Download size={20} />
-                  <span>Export Data</span>
+                <button onClick={exportData} style={{display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'#f2f2f7', borderRadius:12, border:'none', width:'100%', color:'#1c1c1e', fontSize:14, fontWeight:500}}>
+                  <Download size={18} color="#007AFF" /> Export Data
                 </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 rounded-lg text-white hover:bg-gray-700"
-                >
-                  <Upload size={20} />
-                  <span>Import Data</span>
+                <button onClick={() => fileInputRef.current?.click()} style={{display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'#f2f2f7', borderRadius:12, border:'none', width:'100%', color:'#1c1c1e', fontSize:14, fontWeight:500}}>
+                  <Upload size={18} color="#007AFF" /> Import Data
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json"
-                  onChange={importData}
-                  className="hidden"
-                />
+                <input ref={fileInputRef} type="file" accept=".json" onChange={importData} className="hidden" />
               </div>
             </div>
           )}
 
-          <div className="max-w-md mx-auto p-4">
+          {/* Content */}
+          <div style={{maxWidth:480, margin:'0 auto', padding:16}}>
             {tab === 'today' && renderToday()}
             {tab === 'schedule' && renderSchedule()}
             {tab === 'strength' && renderStrength()}
@@ -1035,43 +966,25 @@
             {tab === 'history' && renderHistory()}
           </div>
 
-          <nav className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800">
-            <div className="max-w-md mx-auto flex justify-around py-3">
-              <button
-                onClick={() => setTab('today')}
-                className={`flex flex-col items-center gap-1 ${tab === 'today' ? 'text-blue-400' : 'text-gray-400'}`}
-              >
-                <Dumbbell size={20} />
-                <span className="text-xs">Today</span>
-              </button>
-              <button
-                onClick={() => setTab('schedule')}
-                className={`flex flex-col items-center gap-1 ${tab === 'schedule' ? 'text-blue-400' : 'text-gray-400'}`}
-              >
-                <Calendar size={20} />
-                <span className="text-xs">Schedule</span>
-              </button>
-              <button
-                onClick={() => setTab('strength')}
-                className={`flex flex-col items-center gap-1 ${tab === 'strength' ? 'text-blue-400' : 'text-gray-400'}`}
-              >
-                <TrendingUp size={20} />
-                <span className="text-xs">Strength</span>
-              </button>
-              <button
-                onClick={() => setTab('trends')}
-                className={`flex flex-col items-center gap-1 ${tab === 'trends' ? 'text-blue-400' : 'text-gray-400'}`}
-              >
-                <TrendingUp size={20} />
-                <span className="text-xs">Trends</span>
-              </button>
-              <button
-                onClick={() => setTab('history')}
-                className={`flex flex-col items-center gap-1 ${tab === 'history' ? 'text-blue-400' : 'text-gray-400'}`}
-              >
-                <Calendar size={20} />
-                <span className="text-xs">History</span>
-              </button>
+          {/* Bottom nav */}
+          <nav className="nav-bar" style={{position:'fixed', bottom:0, left:0, right:0, zIndex:50}}>
+            <div style={{maxWidth:480, margin:'0 auto', display:'flex', justifyContent:'space-around', padding:'8px 0 12px'}}>
+              {[
+                { key:'today', label:'Today', icon:<Dumbbell size={22} /> },
+                { key:'schedule', label:'Schedule', icon:<Calendar size={22} /> },
+                { key:'strength', label:'Strength', icon:<TrendingUp size={22} /> },
+                { key:'trends', label:'Trends', icon:<TrendingUp size={22} /> },
+                { key:'history', label:'History', icon:<Calendar size={22} /> },
+              ].map(({ key, label, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  style={{display:'flex', flexDirection:'column', alignItems:'center', gap:3, background:'none', border:'none', color: tab === key ? '#007AFF' : '#8e8e93', minWidth:56}}
+                >
+                  {icon}
+                  <span style={{fontSize:10, fontWeight: tab === key ? 600 : 400}}>{label}</span>
+                </button>
+              ))}
             </div>
           </nav>
         </div>
@@ -1083,4 +996,3 @@
 </body>
 </html>
 
-Make logs program-aware (preserve legacy)
